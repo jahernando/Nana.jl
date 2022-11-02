@@ -18,8 +18,9 @@ function graph_extremes(graph)
 	return extremes, dists
 end
 
-function extremes_maxcontents(extremes, xnd)
+function graph_extremes_maxconents(graph, xnd)
+	extremes, dist = graph_extremes(graph)
 	contents = [xnd.contents[i] + xnd.contents[j] for (i, j) in extremes]
 	i = findall(x -> x .== maximum(contents), contents)
-	return extremes[i]
+	return extremes[i], extremes, dist
 end
