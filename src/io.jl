@@ -1,7 +1,7 @@
 using HDF5
 using DataFrames
 
-export load_data, get_event
+export load_data, event_list, get_event
 
 function load_data(filename::String)
 
@@ -17,7 +17,15 @@ function load_data(filename::String)
 	return df, mc, steps
 end;
 
+"""
+	event_list(df)
 
+	returns the list of the events in the DataFrame
+"""
+function event_list(df)
+	events = sort(collect(Set(df.dataset_id)))
+	return events
+end
 
 """
 	get_event()

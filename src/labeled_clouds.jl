@@ -15,6 +15,7 @@ function _label(labs)
 			return ll
 		end
 	end
+	return 0
 end
 
 function label_cell(edges, cells, coors, labels)

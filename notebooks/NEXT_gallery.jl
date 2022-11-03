@@ -228,13 +228,7 @@ md"""
 """
 
 # ╔═╡ 476e7039-1199-4aa8-a7f3-7e8a14215ade
-
-
-# ╔═╡ 216ce100-7446-4029-bfea-ef95ab4d3030
-begin
-xextrs, xdists = na.graph_extremes(graph)
-extr  , _, _    = na.graph_extremes_maxcontents(graph, xnd)
-end
+xnd
 
 # ╔═╡ 5e2b6643-b5ba-4b7b-8aa7-7c9ec24c5df9
 tree = GG.bfs_tree(graph, extr[1][1])
@@ -247,6 +241,67 @@ end
 
 # ╔═╡ 1f8fe651-2ee4-4b69-a21c-e7773b0f0283
 xx = GG.bfs_tree(mcgraph, mcextr[1][1])
+
+# ╔═╡ ad8a7d63-401a-40c9-9520-7306ae976f92
+begin
+mcnextr = zeros(length(mcnd.contents))
+for (i, j) in mcextr
+	mcnextr[i] = 1
+	mcnextr[j] = 1
+end
+end
+
+# ╔═╡ b9ea99e0-4d9f-46a6-9fb1-a342934487fb
+mcnextr
+
+# ╔═╡ b40e10f4-01e8-4c98-a07d-689df32a5706
+mcnd
+
+# ╔═╡ fc5ee335-bb67-4de2-9448-a286edf8c126
+function dfnodes(xnd, nlabel)
+
+	dd = Dict()
+	dd[:contents] = xnd.contents
+	dd[:size]     = xnd.size
+	for i in 1:length(xnd.coors)
+		dd[Symbol(string("x", i, "_mean"))] = xnd.coors[i]
+		dd[Symbol(string("x", i, "_std")) ] = xnd.coors_std[i]
+	end
+	
+	dd[:maxgrad] = xnd.maxgrad
+	dd[:maxlap]  = xnd.maxlap
+	dd[:minlap]  = xnd.minlap
+	dd[:maxcur]  = xnd.curmax
+	dd[:mincur]  = xnd.curmin
+
+	dd[:nedges] = xnd.nedges
+	dd[:cloud]  = xnd.cloud
+	dd[:ecc]    = xnd.ecc
+	dd[:extreme] = xnd.extremes
+
+	dd[:label]   = nlabel
+	
+	return DataFrame(dd)
+	
+end
+
+# ╔═╡ 63bb90d4-178a-490a-ae8c-8d21e6c10d1d
+dfnd = dfnodes(mcnd, mc_nlabel)
+
+# ╔═╡ dc39374d-52a4-460d-83d8-4701e74b5454
+dfnd[!, :event] .= event
+
+# ╔═╡ 7b881784-ecaa-4a2a-99be-ee85a2dd9cec
+dfnd
+
+# ╔═╡ ea2c540a-3c15-4689-95fb-a4d896ffb20a
+
+
+# ╔═╡ 5c7ba791-9302-41e9-b7f7-b5f0237b581a
+string("x", 1, "_mean")
+
+# ╔═╡ ffbb28d9-bb4c-4708-8fd8-3633124173a5
+mcnd
 
 # ╔═╡ a024311d-e35f-472d-94c7-2c894f1d1dca
 md"""
@@ -338,10 +393,10 @@ end
 end
 
 # ╔═╡ 9d29ba39-ffb9-474d-b34f-0c493e28b09b
-draw_graph(graph, xnd, nlabel)
+draw_graph(graph.spine, xnd, nlabel)
 
 # ╔═╡ 05848241-42ea-4dab-aff2-a1cdecffaf8d
-draw_graph(mcgraph, mcnd, mc_nlabel)
+draw_graph(mcgraph.spine, mcnd, mc_nlabel)
 
 # ╔═╡ 3e6c7109-ada7-4e2b-b78e-b77f352ba407
 draw_graph(tree, xnd, nlabel)
@@ -373,11 +428,11 @@ end;
 # ╠═8aaabf9e-08f7-11ed-1880-e798d62d8295
 # ╟─03bfbaeb-f6f2-4a8b-8815-66d293cbbb66
 # ╟─cdc50171-b288-40b6-9d0d-9511901218e0
-# ╟─f8dbfa77-c88d-42f6-bc2a-600b49f8f98d
-# ╟─6e7e284e-88a1-47f9-9da8-4a79797d8ebd
-# ╟─03d81ddf-105e-4ea6-a882-e1b40b7ecbfc
+# ╠═f8dbfa77-c88d-42f6-bc2a-600b49f8f98d
+# ╠═6e7e284e-88a1-47f9-9da8-4a79797d8ebd
+# ╠═03d81ddf-105e-4ea6-a882-e1b40b7ecbfc
 # ╟─44b35007-912d-49e3-90bb-09aa1360cbe9
-# ╟─14160a98-07a0-4efc-9e71-9aab36ed01b6
+# ╠═14160a98-07a0-4efc-9e71-9aab36ed01b6
 # ╟─99a11ca4-b453-4e0b-a737-d9733b0e8c59
 # ╟─718fbf98-1725-429b-9a1c-609cb38430ac
 # ╟─65597330-86b4-4d17-abae-5df638603cfc
@@ -393,7 +448,7 @@ end;
 # ╠═8cd9d7d2-0e6c-4f1e-a574-9ddc59137412
 # ╠═9d29ba39-ffb9-474d-b34f-0c493e28b09b
 # ╟─a1e1e2a5-f524-4581-b4d3-c59160ca5608
-# ╟─c662109d-8c93-44ce-837e-22c73c64d800
+# ╠═c662109d-8c93-44ce-837e-22c73c64d800
 # ╟─c793bb48-6fed-46c6-a68a-0d26c5c57d50
 # ╟─3d7b4885-8f3d-4449-aa10-5b481a1f6fba
 # ╟─83853cc3-5ec9-4f37-a27e-c7a8563237b8
@@ -403,12 +458,21 @@ end;
 # ╠═05848241-42ea-4dab-aff2-a1cdecffaf8d
 # ╠═5ad5a6a2-2967-4448-8d3e-4bb1c7015a42
 # ╠═476e7039-1199-4aa8-a7f3-7e8a14215ade
-# ╠═216ce100-7446-4029-bfea-ef95ab4d3030
 # ╠═5e2b6643-b5ba-4b7b-8aa7-7c9ec24c5df9
 # ╠═3e6c7109-ada7-4e2b-b78e-b77f352ba407
 # ╠═a9e159a0-9aa1-41d0-93e8-f565bbe4565f
 # ╠═1f8fe651-2ee4-4b69-a21c-e7773b0f0283
 # ╠═c1ce0881-420b-4a55-a091-26a5d62f051c
+# ╠═ad8a7d63-401a-40c9-9520-7306ae976f92
+# ╠═b9ea99e0-4d9f-46a6-9fb1-a342934487fb
+# ╠═b40e10f4-01e8-4c98-a07d-689df32a5706
+# ╠═fc5ee335-bb67-4de2-9448-a286edf8c126
+# ╠═63bb90d4-178a-490a-ae8c-8d21e6c10d1d
+# ╠═dc39374d-52a4-460d-83d8-4701e74b5454
+# ╠═7b881784-ecaa-4a2a-99be-ee85a2dd9cec
+# ╠═ea2c540a-3c15-4689-95fb-a4d896ffb20a
+# ╠═5c7ba791-9302-41e9-b7f7-b5f0237b581a
+# ╠═ffbb28d9-bb4c-4708-8fd8-3633124173a5
 # ╟─a024311d-e35f-472d-94c7-2c894f1d1dca
 # ╠═d543b6b1-dcee-4dd5-8613-2105ecb74888
 # ╠═e04b9d5c-64d2-4da3-90fb-e79bbf169cc6
