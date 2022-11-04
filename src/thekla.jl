@@ -86,7 +86,7 @@ filenames     = ("bb0nu/v2/beersheba_fixed_label_1_0nubb.h5",
 
 
 function thekla(datadir, filenames;
-	 			ofilename = "bb0nu/v2/thekla",
+	 			ofilename = "bb0nu/v2/thekla_nodes",
 				reco = true, cellnode = false, nsteps = 1)
 
 	datatype = reco ? "reco" : "mc"
@@ -108,7 +108,7 @@ function thekla(datadir, filenames;
 			xdf = reco ? idf : imc
 			odf = _thekla(xdf, steps;
 			              nsteps = nsteps, cellnode = cellnode)
-			odf[!, :event] .= event
+			odf[!, :event] .= 1000*i + event
 			dfout = nevts == 0 ? odf : vcat(dfout, odf)
 			nevts += 1
 		end

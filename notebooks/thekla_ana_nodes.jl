@@ -22,10 +22,13 @@ using Plots
 import PlutoUI as PUI
 end
 
+# ╔═╡ a6347485-2dad-4343-bfe0-ed0de5a1e787
+plotly();
+
 # ╔═╡ e4f36710-f912-4f6d-a47c-bc7fb4eff6bb
 begin
 datadir  = "/Users/hernando/work/investigacion/NEXT/data/NEXT100/"
-filename = "bb0nu/v2/thekla_clouds_reco_nsteps1.csv"
+filename = "bb0nu/v2/thekla_nodes_paulina_reco_nsteps3.csv"
 end
 
 # ╔═╡ 3333552d-9f09-411a-9268-0bdc3dc90c27
@@ -39,12 +42,12 @@ begin
 
 function _hist(df, name, bins, alpha)
 	h1 = histogram(df[!, name][df.label .== 1], bins = bins, 
-		alpha = 0.5, density = density, label = "other",
+		alpha = 0.5, normed = true, label = "other",
 		xlabel = name)
 	histogram!(df[!, name][df.label .== 2], bins = bins,
-		alpha = 0.5, density = true, label = "track")
+		alpha = 0.5, normed = true, label = "track")
 	histogram!(df[!, name][df.label .== 3], bins = bins,
-		alpha = 0.5, density = true, label = "blob")
+		alpha = 0.5, normed = true, label = "blob")
 	return h1
 end
 
@@ -57,17 +60,80 @@ for name in names(df)
 end
 end
 
+# ╔═╡ b766ef1d-677e-4ec9-a6ef-cced00451d97
+md"""
+## Global
+"""
+
 # ╔═╡ b6ba75c9-5b69-49ee-a6d4-7ebe49b70294
 bname = @bind name PUI.Select(names(df))
 
 # ╔═╡ 3b3fbbc0-ee0c-499f-af4b-74df41b1c507
 plot(hs[name])
 
+# ╔═╡ b8d0c648-e4c1-4905-bdd7-5956a8735cde
+md"""
+
+## Per Event
+
+"""
+
+# ╔═╡ adb0e135-0dc6-4c49-9bb3-f5a55bcee800
+edf = groupby(df, "event")
+
+# ╔═╡ 1761c74d-576c-48f9-9a42-0b2ccd2b1fb9
+begin
+nevents  = length(Set(df.event))
+md"""
+Number of events : $(nevents)
+"""
+end
+
+# ╔═╡ c43f710b-fcc4-4324-afa3-3f5bcb25f56c
+begin
+nnodes = zeros(Int64, nevents)
+nnodeb = zeros(Int64, nevents)
+nextrs = zeros(Int64, nevents)
+nblobs = zeros(Int64, nevents)
+eblob1 = zeros(Float64, nevents)
+eblob2 = zeros(Float64, nevents)
+for (i, kdf) in enumerate(edf)
+	nnodes[i] = length(kdf.event)
+	nnodeb[i] = sum(kdf.label .== 3)
+	nextrs[i] = sum(kdf.extreme .== 1)
+	nblobs[i] = sum(kdf.label[kdf.extreme .== 1] .== 3)
+	nn = nextrs[i]
+	eblob1[i] = nn >= 2 ? maximum(kdf.contents[kdf.extreme .== 1]) : 0.0
+	eblob2[i] = nn >= 2 ? minimum(kdf.contents[kdf.extreme .== 1]) : 0.0
+end
+dd = Dict(:nnodes => nnodes, :nodesblob => nnodeb, :nextremes => nextrs,
+		  :nblobs => nblobs, :eblob1 => eblob1   , :eblob2 => eblob2)
+dd = DataFrame(dd)
+end
+
+# ╔═╡ 2f36f4c6-6030-48d8-935e-0f839f2764c9
+histogram(dd.nnodes, bins = maximum(dd.nnodes)+1, normed = true, label = "nodes")
+
+# ╔═╡ 7dafda09-dc72-4854-a1e8-e774e01f71ae
+histogram(dd.nodesblob, bins = maximum(dd.nodesblob)+1, normed = true, label = "nodes labeled as blob")
+
+# ╔═╡ fae82dd2-ee6b-4166-8f4f-f4135ec0b415
+histogram(dd.nextremes, bins = 2, normed = true, label = "extremes")
+
+# ╔═╡ 8a306d64-af6b-4b93-aa9a-3731fbb15522
+histogram(dd.nblobs, bins = 2, normed = true, label = "extremes labeled as blobs")
+
+# ╔═╡ 4b8809e3-4d89-42d4-aee1-5da747c1354e
+scatter(dd.eblob1, dd.eblob2, alpha = 0.5, label = "e blobs")
+
+# ╔═╡ e2f7df61-4e0d-4b19-a600-cfe02190df80
+scatter(dd.eblob1[dd.nblobs .== 2], dd.eblob2[dd.nblobs .== 2], alpha = 0.5, label = "e blobs")
+
 # ╔═╡ cb40ac6c-70bc-47c4-a5f2-a86016031b56
 begin
-scatter(df.minlap[df.label .== 3], df.maxgrad[df.label .== 3],
+scatter(df.minlap[df.label .== 3], df.maxlap[df.label .== 3],
 	alpha = 0.5, label = "blob")
-scatter!(df.minlap[df.label .== 1], df.maxgrad[df.label .== 1],
+scatter!(df.minlap[df.label .== 1], df.maxlap[df.label .== 1],
 	aplha = 0.5, label = "other")
 #scatter!(df.minlap[df.label .== 2], df.maxgrad[df.label .== 2],
 #	aplha = 0.5, label = "track")
@@ -1130,12 +1196,24 @@ version = "1.4.1+0"
 
 # ╔═╡ Cell order:
 # ╠═4a04e7a4-5c5f-11ed-3a08-5fcaddecdf9d
+# ╠═a6347485-2dad-4343-bfe0-ed0de5a1e787
 # ╠═e4f36710-f912-4f6d-a47c-bc7fb4eff6bb
 # ╠═3333552d-9f09-411a-9268-0bdc3dc90c27
 # ╠═6e5044ba-6b92-4fca-9a5b-63837b2cc6ab
 # ╠═a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
+# ╠═b766ef1d-677e-4ec9-a6ef-cced00451d97
 # ╠═b6ba75c9-5b69-49ee-a6d4-7ebe49b70294
 # ╠═3b3fbbc0-ee0c-499f-af4b-74df41b1c507
+# ╠═b8d0c648-e4c1-4905-bdd7-5956a8735cde
+# ╠═adb0e135-0dc6-4c49-9bb3-f5a55bcee800
+# ╟─1761c74d-576c-48f9-9a42-0b2ccd2b1fb9
+# ╠═c43f710b-fcc4-4324-afa3-3f5bcb25f56c
+# ╠═2f36f4c6-6030-48d8-935e-0f839f2764c9
+# ╠═7dafda09-dc72-4854-a1e8-e774e01f71ae
+# ╠═fae82dd2-ee6b-4166-8f4f-f4135ec0b415
+# ╠═8a306d64-af6b-4b93-aa9a-3731fbb15522
+# ╠═4b8809e3-4d89-42d4-aee1-5da747c1354e
+# ╠═e2f7df61-4e0d-4b19-a600-cfe02190df80
 # ╠═cb40ac6c-70bc-47c4-a5f2-a86016031b56
 # ╠═efc23b57-76e5-4190-932f-ea52fc269583
 # ╟─00000000-0000-0000-0000-000000000001
