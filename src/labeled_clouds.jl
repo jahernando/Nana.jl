@@ -1,6 +1,6 @@
 import StatsBase  as SB
 
-export bin_ids, label_cell, label_node
+export label_cell, label_node
 
 function bins_ids(coors, edges)
     h = SB.fit(SB.Histogram, coors, edges)

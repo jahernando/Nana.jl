@@ -9,4 +9,7 @@ export load_data, event_list, get_event
 include("labeled_clouds.jl")
 export bin_ids, label_cell, label_node
 
+include("thekla.jl")
+export _coors, _thekla
+
 end
