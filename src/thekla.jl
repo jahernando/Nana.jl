@@ -1,4 +1,4 @@
-using HDF5
+import CSV as CSV
 using DataFrames
 using Clouds
 using LinearAlgebra
@@ -25,6 +25,10 @@ function _dfnodes(xnd, nlabel)
 
 	dd[:distance_cell] = _distance(xnd.coors, xnd.coors_cell)
 
+	vstd = reduce(hcat, xnd.coors_std)
+	dstd = norm.(eachrow(vstd))
+	dd[:dst] = dstd
+
 	dd[:maxgrad] = xnd.maxgrad
 	dd[:maxlap]  = xnd.maxlap
 	dd[:minlap]  = xnd.minlap
@@ -43,7 +47,7 @@ function _dfnodes(xnd, nlabel)
 
 end
 
-function _coors(idf, steps, nsteps = 1.0)
+function _coors(idf, steps; nsteps = 1)
 
 	coors    = Tuple((idf[!, :x], idf[!, :y], idf[!, :z]))
 	contents = copy(idf[!, :energy])
@@ -52,22 +56,71 @@ function _coors(idf, steps, nsteps = 1.0)
 	return coors, contents, xsteps
 end
 
-function _thekla(idf, imc, steps, event)
+function _thekla(idf, steps;
+	 			 nsteps = 1, cellnode = false)
 
-	coors, contents, xsteps = _coors(idf, steps)
+	coors, contents, xsteps = _coors(idf, steps; nsteps = nsteps)
 
-	cl, nd, graph, edges = clouds(coors, contents, xsteps)
+	cl, nd, graph, edges = clouds(coors, contents, xsteps;
+	  							cellnode = cellnode)
 	clabel = label_cell(edges, cl.cells, coors, idf.segclass)
 	nlabel = label_node(cl.node, clabel)
 
 	dd = _dfnodes(nd, nlabel)
-	dd[!, :event] .= event
 	return dd
 end
 
 datadir       = "/Users/hernando/work/investigacion/NEXT/data/NEXT100/"
 filename      = "bb0nu/v2/beersheba_fixed_label_1_0nubb.h5"
+filenames     = ("bb0nu/v2/beersheba_fixed_label_1_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_2_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_3_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_4_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_5_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_6_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_7_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_8_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_9_0nubb.h5",
+	"bb0nu/v2/beersheba_fixed_label_10_0nubb.h5")
 #df, mc, steps = load_data(string(datadir, filename));
+
+
+function thekla(datadir, filenames;
+	 			ofilename = "bb0nu/v2/thekla",
+				reco = true, cellnode = false, nsteps = 1)
+
+	datatype = reco ? "reco" : "mc"
+	algoname = cellnode ? "paulina" : "clouds"
+	ofile    = string(ofilename,  "_", algoname,
+						"_", datatype,
+					 	"_nsteps", nsteps,".csv")
+	println(ofile)
+
+	nevts = 0
+	dfout = DataFrame()
+	for (i, filename) in enumerate(filenames)
+		df, mc, steps = load_data(string(datadir, filename))
+		events        = event_list(df)
+		println("events in file ", filename, " : ", length(events))
+		for event in events
+			idf = get_event(df, event)
+			imc = get_event(mc, event)
+			xdf = reco ? idf : imc
+			odf = _thekla(xdf, steps;
+			              nsteps = nsteps, cellnode = cellnode)
+			odf[!, :event] .= event
+			dfout = nevts == 0 ? odf : vcat(dfout, odf)
+			nevts += 1
+		end
+	end
+
+	ofile = string(datadir, ofile)
+	println("write output at  : ", ofile)
+	println("processed events : ", nevts)
+	CSV.write(ofile, dfout)
+
+	return dfout
+end
 
 #
 # function run(filename, config)
