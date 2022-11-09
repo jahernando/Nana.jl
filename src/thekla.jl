@@ -13,7 +13,7 @@ function _distance(coors0, coors1)
 	return dis
 end
 
-function _dfnodes(xnd, nlabel)
+function _dfnodes(xnd)
 
 	dd = Dict()
 	dd[:contents] = xnd.contents
@@ -40,7 +40,7 @@ function _dfnodes(xnd, nlabel)
 	dd[:ecc]    = xnd.ecc
 	dd[:extreme] = Int64.(xnd.extremes)
 
-	dd[:label]   = nlabel
+	#dd[:label]   = nlabel
 
 	#return dd
 	return DataFrame(dd)
@@ -56,6 +56,13 @@ function _coors(idf, steps; nsteps = 1)
 	return coors, contents, xsteps
 end
 
+function _distance_to_blob(nlabel, dist)
+	nnodes    = length(nlabel)
+	idblobs   = findall(x -> x .== 3, nlabel)
+	dist_blob = [minimum([dist[i, k] for k in idblobs]) for i in 1:nnodes]
+	return dist_blob
+end
+
 function _thekla(idf, steps;
 	 			 nsteps = 1, cellnode = false)
 
@@ -66,27 +73,24 @@ function _thekla(idf, steps;
 	clabel = label_cell(edges, cl.cells, coors, idf.segclass)
 	nlabel = label_node(cl.node, clabel)
 
-	dd = _dfnodes(nd, nlabel)
+	dd         = _dfnodes(nd)
+	dd[!, :label] = nlabel
+
+	disttoblob = _distance_to_blob(nlabel, graph.dists)
+	dd[!, :disttoblob] = disttoblob
+
 	return dd
 end
 
 datadir       = "/Users/hernando/work/investigacion/NEXT/data/NEXT100/"
 filename      = "bb0nu/v2/beersheba_fixed_label_1_0nubb.h5"
-filenames     = ("bb0nu/v2/beersheba_fixed_label_1_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_2_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_3_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_4_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_5_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_6_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_7_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_8_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_9_0nubb.h5",
-	"bb0nu/v2/beersheba_fixed_label_10_0nubb.h5")
+filenames     = Tuple(string("bb0nu/v2/beersheba_fixed_label_", i, "_0nubb.h5")
+				for i in 1:249)
 #df, mc, steps = load_data(string(datadir, filename));
 
 
 function thekla(datadir, filenames;
-	 			ofilename = "bb0nu/v2/thekla_nodes",
+	 			ofilename = "bb0nu/v2/thekla_nodes_nfiles50",
 				reco = true, cellnode = false, nsteps = 1)
 
 	datatype = reco ? "reco" : "mc"
