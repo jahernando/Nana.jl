@@ -411,8 +411,8 @@ function load_data(filename)
 end;
 
 # ╔═╡ Cell order:
-# ╟─82c494e0-b75e-474e-b08c-cde3791a121e
-# ╟─8aaabf9e-08f7-11ed-1880-e798d62d8295
+# ╠═82c494e0-b75e-474e-b08c-cde3791a121e
+# ╠═8aaabf9e-08f7-11ed-1880-e798d62d8295
 # ╟─03bfbaeb-f6f2-4a8b-8815-66d293cbbb66
 # ╟─cdc50171-b288-40b6-9d0d-9511901218e0
 # ╟─f8dbfa77-c88d-42f6-bc2a-600b49f8f98d

@@ -18,9 +18,23 @@ end
 begin
 using CSV
 using DataFrames
+using StatsBase
 using Plots
 import PlutoUI as PUI
 end
+
+# ╔═╡ 68e36c10-a172-449b-b37e-28ecd17ff3a8
+md"""
+
+# NEXT-100 nodes analysis
+
+Compare Clouds and Paulina
+
+J.A Hernando
+
+November 2022
+
+"""
 
 # ╔═╡ a6347485-2dad-4343-bfe0-ed0de5a1e787
 plotly();
@@ -28,14 +42,62 @@ plotly();
 # ╔═╡ e4f36710-f912-4f6d-a47c-bc7fb4eff6bb
 begin
 datadir  = "/Users/hernando/work/investigacion/NEXT/data/NEXT100/"
-filename = "bb0nu/v2/thekla_nodes_paulina_reco_nsteps3.csv"
 end
 
-# ╔═╡ 3333552d-9f09-411a-9268-0bdc3dc90c27
-df = DataFrame(CSV.File(string(datadir, filename)))
+# ╔═╡ b16c5925-ad77-41a0-9fec-4f016a4e0b66
+md"""
+## Blob success rate
+"""
 
-# ╔═╡ 6e5044ba-6b92-4fca-9a5b-63837b2cc6ab
-names(df)
+# ╔═╡ f7c8c720-7516-4fe9-b0d5-ccf8341870bd
+anas = ["clouds_mc_nsteps1",  "clouds_mc_nsteps2", "clouds_mc_nsteps3",    "clouds_mc_nsteps4", "clouds_reco_nsteps1", "clouds_reco_nsteps2", "clouds_reco_nsteps3", "clouds_reco_nsteps4", "paulina_mc_nsteps1", "paulina_mc_nsteps2", "paulina_mc_nsteps3", "paulina_mc_nsteps4", "paulina_reco_nsteps2", "paulina_reco_nsteps3", "paulina_reco_nsteps4"];
+
+# ╔═╡ 73efbbfa-70a8-4e6a-a019-77810f45b2e3
+begin
+dfs = Dict()
+for afile in anas
+	filename = string("bb0nu/v2/thekla_nodes_nfiles50_", afile, ".csv")
+	println(filename)
+	dfs[afile] = DataFrame(CSV.File(string(datadir, filename)))
+end
+end
+
+# ╔═╡ ebf97462-f102-4e9b-822a-8c6ce12f4861
+md"""
+
+## Extreme distance to blob
+
+"""
+
+# ╔═╡ 5a3d7765-1281-46f6-b7f6-8cc01bf388e8
+begin
+
+function _dist_to_blob(df)
+	sel      = df.extreme .== 1
+	vars     = df.disttoblob[sel]
+	nbins    = 1 + maximum(vars)
+	h        = fit(Histogram, vars, nbins = nbins)
+	contents = h.weights/sum(h.weights)
+	res      = Tuple(round(x, digits = 3) for x in (contents[1], contents[1] + contents[2]))
+	return res
+end
+
+dblobs = Dict()
+for ana in anas
+	dblobs[ana] = _dist_to_blob(dfs[ana])
+end
+
+end
+
+# ╔═╡ 93d3f989-c0bb-494d-bd87-e5984d72c66b
+md"""
+
+## Distributions depending on the label
+
+"""
+
+# ╔═╡ f20085cb-bb9b-47c3-933f-5f01d1367c6e
+bana = @bind xana PUI.Select(collect(keys(dfs)); default = "clouds_reco_nsteps1")
 
 # ╔═╡ a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
 begin
@@ -43,7 +105,7 @@ begin
 function _hist(df, name, bins, alpha)
 	h1 = histogram(df[!, name][df.label .== 1], bins = bins, 
 		alpha = 0.5, normed = true, label = "other",
-		xlabel = name)
+		title = name)
 	histogram!(df[!, name][df.label .== 2], bins = bins,
 		alpha = 0.5, normed = true, label = "track")
 	histogram!(df[!, name][df.label .== 3], bins = bins,
@@ -51,99 +113,208 @@ function _hist(df, name, bins, alpha)
 	return h1
 end
 
-hs = Dict()
-alpha = 0.5
-for name in names(df)
-	bins = range(minimum(df[!, name]), 1.1*maximum(df[!,name]), 100)
-	hi = _hist(df, name, bins, alpha)
-	hs[name] = hi
+function _histos(df)
+	hs = Dict()
+	alpha = 0.5
+	for name in names(df)
+		bins = range(minimum(df[!, name]), 1.1*maximum(df[!,name]), 100)
+		hi = _hist(df, name, bins, alpha)
+		hs[name] = hi
+	end
+	return hs
 end
-end
 
-# ╔═╡ b766ef1d-677e-4ec9-a6ef-cced00451d97
-md"""
-## Global
-"""
+end;
 
-# ╔═╡ b6ba75c9-5b69-49ee-a6d4-7ebe49b70294
-bname = @bind name PUI.Select(names(df))
+# ╔═╡ 51da992d-06eb-48ca-9127-ae574fbc1a93
+begin
+df = dfs[xana]
+hs = _histos(df)
+end;
 
-# ╔═╡ 3b3fbbc0-ee0c-499f-af4b-74df41b1c507
+# ╔═╡ 2923a69b-b819-4567-899c-d9982e9cd107
+bname = @bind name PUI.Select(names(df); default = "contents")
+
+# ╔═╡ 406d01f4-5494-4917-888c-7fec1bb862d9
 plot(hs[name])
 
-# ╔═╡ b8d0c648-e4c1-4905-bdd7-5956a8735cde
-md"""
-
-## Per Event
-
-"""
-
-# ╔═╡ adb0e135-0dc6-4c49-9bb3-f5a55bcee800
-edf = groupby(df, "event")
-
-# ╔═╡ 1761c74d-576c-48f9-9a42-0b2ccd2b1fb9
+# ╔═╡ 6bdb9cbf-111c-44b7-b80d-dbe3264096cd
 begin
-nevents  = length(Set(df.event))
-md"""
-Number of events : $(nevents)
-"""
+ispaulina = occursin("paulina", xana)
+xnames = ispaulina ? ["contents", "maxgrad", "maxlap", "minlap"] : ["contents", "size", "dst", "maxgrad", "maxlap", "minlap"]
+xlayout = ispaulina ? (2, 2) : (3, 2)
+xhis   = [hs[name] for name in xnames]
+plot(xhis..., layout = xlayout, size = (650, 700), legend = false)
 end
+
+# ╔═╡ 07f27c84-82de-4590-85c9-c91900469ead
+md"""
+
+## Code
+
+"""
 
 # ╔═╡ c43f710b-fcc4-4324-afa3-3f5bcb25f56c
-begin
-nnodes = zeros(Int64, nevents)
-nnodeb = zeros(Int64, nevents)
-nextrs = zeros(Int64, nevents)
-nblobs = zeros(Int64, nevents)
-eblob1 = zeros(Float64, nevents)
-eblob2 = zeros(Float64, nevents)
-for (i, kdf) in enumerate(edf)
-	nnodes[i] = length(kdf.event)
-	nnodeb[i] = sum(kdf.label .== 3)
-	nextrs[i] = sum(kdf.extreme .== 1)
-	nblobs[i] = sum(kdf.label[kdf.extreme .== 1] .== 3)
-	nn = nextrs[i]
-	eblob1[i] = nn >= 2 ? maximum(kdf.contents[kdf.extreme .== 1]) : 0.0
-	eblob2[i] = nn >= 2 ? minimum(kdf.contents[kdf.extreme .== 1]) : 0.0
-end
-dd = Dict(:nnodes => nnodes, :nodesblob => nnodeb, :nextremes => nextrs,
-		  :nblobs => nblobs, :eblob1 => eblob1   , :eblob2 => eblob2)
-dd = DataFrame(dd)
-end
-
-# ╔═╡ 2f36f4c6-6030-48d8-935e-0f839f2764c9
-histogram(dd.nnodes, bins = maximum(dd.nnodes)+1, normed = true, label = "nodes")
-
-# ╔═╡ 7dafda09-dc72-4854-a1e8-e774e01f71ae
-histogram(dd.nodesblob, bins = maximum(dd.nodesblob)+1, normed = true, label = "nodes labeled as blob")
-
-# ╔═╡ fae82dd2-ee6b-4166-8f4f-f4135ec0b415
-histogram(dd.nextremes, bins = 2, normed = true, label = "extremes")
-
-# ╔═╡ 8a306d64-af6b-4b93-aa9a-3731fbb15522
-histogram(dd.nblobs, bins = 2, normed = true, label = "extremes labeled as blobs")
-
-# ╔═╡ 4b8809e3-4d89-42d4-aee1-5da747c1354e
-scatter(dd.eblob1, dd.eblob2, alpha = 0.5, label = "e blobs")
-
-# ╔═╡ e2f7df61-4e0d-4b19-a600-cfe02190df80
-scatter(dd.eblob1[dd.nblobs .== 2], dd.eblob2[dd.nblobs .== 2], alpha = 0.5, label = "e blobs")
-
-# ╔═╡ cb40ac6c-70bc-47c4-a5f2-a86016031b56
-begin
-scatter(df.minlap[df.label .== 3], df.maxlap[df.label .== 3],
-	alpha = 0.5, label = "blob")
-scatter!(df.minlap[df.label .== 1], df.maxlap[df.label .== 1],
-	aplha = 0.5, label = "other")
-#scatter!(df.minlap[df.label .== 2], df.maxgrad[df.label .== 2],
-#	aplha = 0.5, label = "track")
+function dfperevent(df)
+	nevents  = length(Set(df.event))
+	nnodes = zeros(Int64, nevents)
+	nnodeb = zeros(Int64, nevents)
+	nextrs = zeros(Int64, nevents)
+	nblobs = zeros(Int64, nevents)
+	eblob1 = zeros(Float64, nevents)
+	eblob2 = zeros(Float64, nevents)
+	edf    = groupby(df, :event)
+	for (i, kdf) in enumerate(edf)
+		nnodes[i] = length(kdf.event)
+		nnodeb[i] = sum(kdf.label .== 3)
+		nextrs[i] = sum(kdf.extreme .== 1)
+		nblobs[i] = sum(kdf.label[kdf.extreme .== 1] .== 3)
+		nn = nextrs[i]
+		eblob1[i] = nn >= 2 ? maximum(kdf.contents[kdf.extreme .== 1]) : 0.0
+		eblob2[i] = nn >= 2 ? minimum(kdf.contents[kdf.extreme .== 1]) : 0.0
+	end
+	dd = Dict(:nnodes => nnodes, :nodesblob => nnodeb, :nextremes => nextrs,
+			  :nblobs => nblobs, :eblob1 => eblob1   , :eblob2 => eblob2)
+	dd = DataFrame(dd)
+return dd
 end
 
-# ╔═╡ efc23b57-76e5-4190-932f-ea52fc269583
+# ╔═╡ 983028df-7260-4dc1-8a60-7871d0ea144c
 begin
-sel = df.label .== 2
-val = (df.maxlap[sel] .- df.minlap[sel])./df.maxlap[sel]
-histogram(val, bins = range(0., 10., 100))
+dfs_pevt = Dict()
+for afile in anas
+	dfs_pevt[afile] = dfperevent(dfs[afile])
+end
+end
+
+# ╔═╡ 811d9582-17b6-4e24-816f-12e505cb55ea
+begin
+his = Vector()
+for afile in anas
+	idf = dfs_pevt[afile]
+	hi = histogram(idf.nblobs, nbins = 3, normed = true, title = afile)
+	push!(his, hi)
+end
+#plot(his..., size = (700, 700), legend = false)
+end
+
+# ╔═╡ e39ab4c9-9074-4129-a4fc-de009a54626d
+begin
+	
+function _blob_success(df)
+	hh = fit(Histogram, df.nblobs, nbins = 3)
+	contents = hh.weights/sum(hh.weights)
+	res = Tuple(round(x, digits = 3) for x in (contents[3], contents[2] + contents[3]))
+	return res
+end
+	
+success = Dict()
+for ana in anas
+	success[ana] = _blob_success(dfs_pevt[ana])
+end
+	
+end
+
+# ╔═╡ 125a75ec-5726-4e7e-88be-9b1faf094845
+md"""
+
+**Blob success rate**
+
+**Clouds**
+
+| success   | mc-1 | mc-2 | mc-3 | mc-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 2  blobs  | $(success["clouds_mc_nsteps1"][1]) | $(success["clouds_mc_nsteps2"][1]) | $(success["clouds_mc_nsteps3"][1]) | $(success["clouds_mc_nsteps4"][1]) |
+| >= 1 blob | $(success["clouds_mc_nsteps1"][2]) |$(success["clouds_mc_nsteps2"][2]) | $(success["clouds_mc_nsteps3"][2]) |$(success["clouds_mc_nsteps4"][2]) |
+
+
+| success   | reco-1 | reco-2 | reco-3 | reco-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 2  blobs  | $(success["clouds_reco_nsteps1"][1]) | $(success["clouds_reco_nsteps2"][1]) | $(success["clouds_reco_nsteps3"][1]) | $(success["clouds_reco_nsteps4"][1]) |
+| >= 1 blob | $(success["clouds_reco_nsteps1"][2]) |$(success["clouds_reco_nsteps2"][2]) | $(success["clouds_reco_nsteps3"][2]) |$(success["clouds_reco_nsteps4"][2]) |
+
+
+"""
+
+# ╔═╡ e4d716ba-5bc7-4c4f-90ff-7d0070b5f2c3
+md"""
+
+**Blob success rate**
+
+
+**Paulina**
+
+| success   | mc-1 | mc-2 | mc-3 | mc-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 2  blobs  | $(success["paulina_mc_nsteps1"][1]) | $(success["paulina_mc_nsteps2"][1]) | $(success["paulina_mc_nsteps3"][1]) | $(success["paulina_mc_nsteps4"][1]) |
+| >= 1 blob | $(success["paulina_mc_nsteps1"][2]) |$(success["paulina_mc_nsteps2"][2]) | $(success["paulina_mc_nsteps3"][2]) |$(success["paulina_mc_nsteps4"][2]) |
+
+
+| success   | reco-1 | reco-2 | reco-3 | reco-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 2  blobs  |  | $(success["paulina_reco_nsteps2"][1]) | $(success["paulina_reco_nsteps3"][1]) | $(success["paulina_reco_nsteps4"][1]) |
+| >= 1 blob | |$(success["paulina_reco_nsteps2"][2]) | $(success["paulina_reco_nsteps3"][2]) |$(success["paulina_reco_nsteps4"][2]) |
+
+
+"""
+
+# ╔═╡ 1e6e4800-94a1-4e85-935b-772353225dee
+md"""
+
+**Distance of the blob to the extremes**
+
+**Clouds**
+
+| distance   | mc-1 | mc-2 | mc-3 | mc-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 0  | $(dblobs["clouds_mc_nsteps1"][1]) | $(dblobs["clouds_mc_nsteps2"][1]) | $(dblobs["clouds_mc_nsteps3"][1]) | $(dblobs["clouds_mc_nsteps4"][1]) |
+| 1 | $(dblobs["clouds_mc_nsteps1"][2]) |$(dblobs["clouds_mc_nsteps2"][2]) | $(dblobs["clouds_mc_nsteps3"][2]) |$(dblobs["clouds_mc_nsteps4"][2]) |
+
+
+| distance   | reco-1 | reco-2 | reco-3 | reco-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 0  | $(dblobs["clouds_reco_nsteps1"][1]) | $(dblobs["clouds_reco_nsteps2"][1]) | $(success["clouds_reco_nsteps3"][1]) | $(dblobs["clouds_reco_nsteps4"][1]) |
+| 1 | $(dblobs["clouds_reco_nsteps1"][2]) |$(dblobs["clouds_reco_nsteps2"][2]) | $(dblobs["clouds_reco_nsteps3"][2]) |$(dblobs["clouds_reco_nsteps4"][2]) |
+
+"""
+
+# ╔═╡ b63c3e9b-4ce8-4b55-ac73-0b22ff0c77e6
+md"""
+
+**Distance of the blob to the extremes**
+
+**Paulina**
+
+| distance   | mc-1 | mc-2 | mc-3 | mc-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 0  | $(dblobs["paulina_mc_nsteps1"][1]) | $(dblobs["paulina_mc_nsteps2"][1]) | $(dblobs["paulina_mc_nsteps3"][1]) | $(dblobs["paulina_mc_nsteps4"][1]) |
+| 1 | $(dblobs["paulina_mc_nsteps1"][2]) |$(dblobs["paulina_mc_nsteps2"][2]) | $(dblobs["paulina_mc_nsteps3"][2]) |$(dblobs["paulina_mc_nsteps4"][2]) |
+
+
+| distance   | reco-1 | reco-2 | reco-3 | reco-4 |
+| ---:      |  --:   |    --: | --:    |   --:  |
+| 0  |  | $(dblobs["paulina_reco_nsteps2"][1]) | $(success["paulina_reco_nsteps3"][1]) | $(dblobs["paulina_reco_nsteps4"][1]) |
+| 1 |  |$(dblobs["paulina_reco_nsteps2"][2]) | $(dblobs["paulina_reco_nsteps3"][2]) |$(dblobs["paulina_reco_nsteps4"][2]) |
+
+"""
+
+# ╔═╡ 3cab1762-3fe1-43b9-a098-36aa8b93c4f3
+begin
+h1 = histogram(dfs_pevt[xana].nblobs, nbins = 3, normed = true, title = "blob sucess", legend = false)
+
+vars  = df.disttoblob[df.extreme .== 1]
+h2 = histogram(vars, nbins = 1 + maximum(vars), normed = true, title = "blob distance to extreme", legend = false)
+
+vars2 = dfs_pevt[xana].nnodes
+h3  = histogram(dfs_pevt[xana].nnodes, nbins = 1 + maximum(vars2), title = "nodes")
+
+vars3 = dfs_pevt[xana].eblob1
+bins = range(minimum(vars3), 1.1*maximum(vars3), 100)
+h4  = histogram(dfs_pevt[xana].eblob1, nbins = bins, title = "blob energy", label = "1", alpha = 0.5)
+histogram!(dfs_pevt[xana].eblob2, nbins = bins, label = "2", alpha = 0.5)
+
+	
+plot(h1, h2, h3, h4, layout = (2, 2), size = (650, 600))
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -153,12 +324,14 @@ CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CSV = "~0.10.7"
 DataFrames = "~1.4.2"
 Plots = "~1.35.8"
 PlutoUI = "~0.7.48"
+StatsBase = "~0.33.21"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -782,9 +955,9 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
-git-tree-sha1 = "c6c0f690d0cc7caddb74cef7aa847b824a16b256"
+git-tree-sha1 = "0c03844e2231e12fda4d0086fd7cbe4098ee8dc5"
 uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
-version = "5.15.3+1"
+version = "5.15.3+2"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -1195,26 +1368,31 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═4a04e7a4-5c5f-11ed-3a08-5fcaddecdf9d
-# ╠═a6347485-2dad-4343-bfe0-ed0de5a1e787
-# ╠═e4f36710-f912-4f6d-a47c-bc7fb4eff6bb
-# ╠═3333552d-9f09-411a-9268-0bdc3dc90c27
-# ╠═6e5044ba-6b92-4fca-9a5b-63837b2cc6ab
-# ╠═a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
-# ╠═b766ef1d-677e-4ec9-a6ef-cced00451d97
-# ╠═b6ba75c9-5b69-49ee-a6d4-7ebe49b70294
-# ╠═3b3fbbc0-ee0c-499f-af4b-74df41b1c507
-# ╠═b8d0c648-e4c1-4905-bdd7-5956a8735cde
-# ╠═adb0e135-0dc6-4c49-9bb3-f5a55bcee800
-# ╟─1761c74d-576c-48f9-9a42-0b2ccd2b1fb9
-# ╠═c43f710b-fcc4-4324-afa3-3f5bcb25f56c
-# ╠═2f36f4c6-6030-48d8-935e-0f839f2764c9
-# ╠═7dafda09-dc72-4854-a1e8-e774e01f71ae
-# ╠═fae82dd2-ee6b-4166-8f4f-f4135ec0b415
-# ╠═8a306d64-af6b-4b93-aa9a-3731fbb15522
-# ╠═4b8809e3-4d89-42d4-aee1-5da747c1354e
-# ╠═e2f7df61-4e0d-4b19-a600-cfe02190df80
-# ╠═cb40ac6c-70bc-47c4-a5f2-a86016031b56
-# ╠═efc23b57-76e5-4190-932f-ea52fc269583
+# ╟─68e36c10-a172-449b-b37e-28ecd17ff3a8
+# ╟─4a04e7a4-5c5f-11ed-3a08-5fcaddecdf9d
+# ╟─a6347485-2dad-4343-bfe0-ed0de5a1e787
+# ╟─e4f36710-f912-4f6d-a47c-bc7fb4eff6bb
+# ╟─b16c5925-ad77-41a0-9fec-4f016a4e0b66
+# ╟─f7c8c720-7516-4fe9-b0d5-ccf8341870bd
+# ╟─73efbbfa-70a8-4e6a-a019-77810f45b2e3
+# ╟─983028df-7260-4dc1-8a60-7871d0ea144c
+# ╟─811d9582-17b6-4e24-816f-12e505cb55ea
+# ╟─e39ab4c9-9074-4129-a4fc-de009a54626d
+# ╟─125a75ec-5726-4e7e-88be-9b1faf094845
+# ╟─e4d716ba-5bc7-4c4f-90ff-7d0070b5f2c3
+# ╟─ebf97462-f102-4e9b-822a-8c6ce12f4861
+# ╟─5a3d7765-1281-46f6-b7f6-8cc01bf388e8
+# ╟─1e6e4800-94a1-4e85-935b-772353225dee
+# ╟─b63c3e9b-4ce8-4b55-ac73-0b22ff0c77e6
+# ╟─93d3f989-c0bb-494d-bd87-e5984d72c66b
+# ╟─f20085cb-bb9b-47c3-933f-5f01d1367c6e
+# ╟─51da992d-06eb-48ca-9127-ae574fbc1a93
+# ╟─3cab1762-3fe1-43b9-a098-36aa8b93c4f3
+# ╟─2923a69b-b819-4567-899c-d9982e9cd107
+# ╟─406d01f4-5494-4917-888c-7fec1bb862d9
+# ╟─a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
+# ╟─6bdb9cbf-111c-44b7-b80d-dbe3264096cd
+# ╟─07f27c84-82de-4590-85c9-c91900469ead
+# ╟─c43f710b-fcc4-4324-afa3-3f5bcb25f56c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
