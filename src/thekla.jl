@@ -59,6 +59,9 @@ end
 function _distance_to_blob(nlabel, dist)
 	nnodes    = length(nlabel)
 	idblobs   = findall(x -> x .== 3, nlabel)
+	if (length(idblobs) <= 0)
+		return zeros(Int64, nnodes)
+	end
 	dist_blob = [minimum([dist[i, k] for k in idblobs]) for i in 1:nnodes]
 	return dist_blob
 end
