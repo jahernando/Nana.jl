@@ -89,15 +89,47 @@ end
 
 end
 
-# ╔═╡ 93d3f989-c0bb-494d-bd87-e5984d72c66b
+# ╔═╡ dca05fbd-cd93-4b7e-b83d-0a2b3dfa4527
 md"""
 
-## Distributions depending on the label
+## Average quantities
+
+"""
+
+# ╔═╡ d9e5028d-d19a-4273-8411-717bf6df71c9
+md"""
+
+## Event summary
 
 """
 
 # ╔═╡ f20085cb-bb9b-47c3-933f-5f01d1367c6e
-bana = @bind xana PUI.Select(collect(keys(dfs)); default = "clouds_reco_nsteps1")
+bana = @bind xana PUI.Select(sort(collect(keys(dfs))); default = "clouds_reco_nsteps1")
+
+# ╔═╡ d1abb94b-9164-4559-8863-23b8d9750a23
+function _histos_var(df)
+	hs = Dict()
+	ts = Dict()
+	for name in names(df)
+		var = df[!, name]
+		vmin, vmax = minimum(var), maximum(var)
+		m, s = (round(mean(var), digits = 3) , round(std(var), digits = 3))
+		ss = string("mean = ", m, ", std = ", s)
+		nbins = typeof(vmin) == Int64 ? (0:1:vmax+1) : range(vmin, 1.1*vmax, 100) 
+		hi = histogram(var, nbins = nbins, title = name, normed = true, label = ss)
+		hs[name] = hi
+		ts[name] = (m, s)
+	end
+	return hs, ts
+end
+
+
+# ╔═╡ 93d3f989-c0bb-494d-bd87-e5984d72c66b
+md"""
+
+## Node variable distributions vs label
+
+"""
 
 # ╔═╡ a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
 begin
@@ -156,25 +188,43 @@ md"""
 
 # ╔═╡ c43f710b-fcc4-4324-afa3-3f5bcb25f56c
 function dfperevent(df)
-	nevents  = length(Set(df.event))
-	nnodes = zeros(Int64, nevents)
-	nnodeb = zeros(Int64, nevents)
-	nextrs = zeros(Int64, nevents)
-	nblobs = zeros(Int64, nevents)
-	eblob1 = zeros(Float64, nevents)
-	eblob2 = zeros(Float64, nevents)
-	edf    = groupby(df, :event)
+	nevents = length(Set(df.event))
+	ncloud  = zeros(Int64, nevents) 
+	nnodes  = zeros(Int64, nevents)
+	nnodeb  = zeros(Int64, nevents)
+	nextrs  = zeros(Int64, nevents)
+	nblobs  = zeros(Int64, nevents)
+	eextr1  = zeros(Float64, nevents)
+	eextr2  = zeros(Float64, nevents)
+	ext2isb = zeros(Int64, nevents)
+	eblob1  = zeros(Float64, nevents)
+	eblob2  = zeros(Float64, nevents)
+	edf     = groupby(df, :event)
 	for (i, kdf) in enumerate(edf)
 		nnodes[i] = length(kdf.event)
+		ncloud[i] = maximum(kdf.cloud)
 		nnodeb[i] = sum(kdf.label .== 3)
 		nextrs[i] = sum(kdf.extreme .== 1)
 		nblobs[i] = sum(kdf.label[kdf.extreme .== 1] .== 3)
-		nn = nextrs[i]
-		eblob1[i] = nn >= 2 ? maximum(kdf.contents[kdf.extreme .== 1]) : 0.0
-		eblob2[i] = nn >= 2 ? minimum(kdf.contents[kdf.extreme .== 1]) : 0.0
+		idextr  = findall(x -> x == 1, kdf.extreme)
+		idblobs = findall(x -> x == 3, kdf.label)
+		if (length(idextr) >= 2)
+			eextr   = kdf.contents[idextr]
+			k       = argmin(eextr)
+			idb2    = idextr[k]
+			ext2isb[i] =  kdf.label[idb2] == 3
+			eextr1[i]  = maximum(eextr)
+			eextr2[i]  = minimum(eextr)
+		end   
+		if (length(idblobs) >= 2)
+			eblobs = sort(kdf.contents[idblobs], rev = true)
+			eblob1[i] = eblobs[1]
+			eblob2[i] = eblobs[2]
+		end
 	end
-	dd = Dict(:nnodes => nnodes, :nodesblob => nnodeb, :nextremes => nextrs,
-			  :nblobs => nblobs, :eblob1 => eblob1   , :eblob2 => eblob2)
+	dd = Dict(:nclouds => ncloud, :nnodes => nnodes, :nodesblob => nnodeb,         		  :nextremes => nextrs, :nblobs => nblobs, 
+		      :eextr1 => eextr1, :eextr2 => eextr2, :ext2isb => ext2isb,
+		      :eblob1 => eblob1, :eblob2 => eblob2)
 	dd = DataFrame(dd)
 return dd
 end
@@ -207,10 +257,17 @@ function _blob_success(df)
 	res = Tuple(round(x, digits = 3) for x in (contents[3], contents[2] + contents[3]))
 	return res
 end
+
+function _blob2_success(df)
+	return round(sum(df.ext2isb .== 1)/length(df.ext2isb), digits = 3)
+end
+
 	
-success = Dict()
+success   = Dict()
+b2success = Dict()
 for ana in anas
-	success[ana] = _blob_success(dfs_pevt[ana])
+	success[ana]   = _blob_success(dfs_pevt[ana])
+	b2success[ana] = _blob2_success(dfs_pevt[ana])
 end
 	
 end
@@ -226,12 +283,15 @@ md"""
 | ---:      |  --:   |    --: | --:    |   --:  |
 | 2  blobs  | $(success["clouds_mc_nsteps1"][1]) | $(success["clouds_mc_nsteps2"][1]) | $(success["clouds_mc_nsteps3"][1]) | $(success["clouds_mc_nsteps4"][1]) |
 | >= 1 blob | $(success["clouds_mc_nsteps1"][2]) |$(success["clouds_mc_nsteps2"][2]) | $(success["clouds_mc_nsteps3"][2]) |$(success["clouds_mc_nsteps4"][2]) |
+| blob-2 | $(b2success["clouds_mc_nsteps1"]) |$(b2success["clouds_mc_nsteps2"]) | $(b2success["clouds_mc_nsteps3"]) |$(b2success["clouds_mc_nsteps4"]) |
 
 
 | success   | reco-1 | reco-2 | reco-3 | reco-4 |
 | ---:      |  --:   |    --: | --:    |   --:  |
 | 2  blobs  | $(success["clouds_reco_nsteps1"][1]) | $(success["clouds_reco_nsteps2"][1]) | $(success["clouds_reco_nsteps3"][1]) | $(success["clouds_reco_nsteps4"][1]) |
 | >= 1 blob | $(success["clouds_reco_nsteps1"][2]) |$(success["clouds_reco_nsteps2"][2]) | $(success["clouds_reco_nsteps3"][2]) |$(success["clouds_reco_nsteps4"][2]) |
+| blob-2 | $(b2success["clouds_reco_nsteps1"]) |$(b2success["clouds_reco_nsteps2"]) | $(b2success["clouds_reco_nsteps3"]) |$(b2success["clouds_reco_nsteps4"]) |
+
 
 
 """
@@ -248,12 +308,15 @@ md"""
 | ---:      |  --:   |    --: | --:    |   --:  |
 | 2  blobs  | $(success["paulina_mc_nsteps1"][1]) | $(success["paulina_mc_nsteps2"][1]) | $(success["paulina_mc_nsteps3"][1]) | $(success["paulina_mc_nsteps4"][1]) |
 | >= 1 blob | $(success["paulina_mc_nsteps1"][2]) |$(success["paulina_mc_nsteps2"][2]) | $(success["paulina_mc_nsteps3"][2]) |$(success["paulina_mc_nsteps4"][2]) |
+| blob-2 | $(b2success["paulina_mc_nsteps1"]) |$(b2success["paulina_mc_nsteps2"]) | $(b2success["paulina_mc_nsteps3"]) |$(b2success["paulina_mc_nsteps4"]) |
+
 
 
 | success   | reco-1 | reco-2 | reco-3 | reco-4 |
 | ---:      |  --:   |    --: | --:    |   --:  |
 | 2  blobs  |  | $(success["paulina_reco_nsteps2"][1]) | $(success["paulina_reco_nsteps3"][1]) | $(success["paulina_reco_nsteps4"][1]) |
 | >= 1 blob | |$(success["paulina_reco_nsteps2"][2]) | $(success["paulina_reco_nsteps3"][2]) |$(success["paulina_reco_nsteps4"][2]) |
+| blob-2 | |$(b2success["paulina_reco_nsteps2"]) | $(b2success["paulina_reco_nsteps3"]) |$(b2success["paulina_reco_nsteps4"]) |
 
 
 """
@@ -271,10 +334,12 @@ md"""
 | 1 | $(dblobs["clouds_mc_nsteps1"][2]) |$(dblobs["clouds_mc_nsteps2"][2]) | $(dblobs["clouds_mc_nsteps3"][2]) |$(dblobs["clouds_mc_nsteps4"][2]) |
 
 
+
 | distance   | reco-1 | reco-2 | reco-3 | reco-4 |
 | ---:      |  --:   |    --: | --:    |   --:  |
 | 0  | $(dblobs["clouds_reco_nsteps1"][1]) | $(dblobs["clouds_reco_nsteps2"][1]) | $(success["clouds_reco_nsteps3"][1]) | $(dblobs["clouds_reco_nsteps4"][1]) |
 | 1 | $(dblobs["clouds_reco_nsteps1"][2]) |$(dblobs["clouds_reco_nsteps2"][2]) | $(dblobs["clouds_reco_nsteps3"][2]) |$(dblobs["clouds_reco_nsteps4"][2]) |
+
 
 """
 
@@ -298,23 +363,34 @@ md"""
 
 """
 
-# ╔═╡ 3cab1762-3fe1-43b9-a098-36aa8b93c4f3
+# ╔═╡ fcb09033-3965-40a3-8c7e-34f360540843
 begin
-h1 = histogram(dfs_pevt[xana].nblobs, nbins = 3, normed = true, title = "blob sucess", legend = false)
-
-vars  = df.disttoblob[df.extreme .== 1]
-h2 = histogram(vars, nbins = 1 + maximum(vars), normed = true, title = "blob distance to extreme", legend = false)
-
-vars2 = dfs_pevt[xana].nnodes
-h3  = histogram(dfs_pevt[xana].nnodes, nbins = 1 + maximum(vars2), title = "nodes")
-
-vars3 = dfs_pevt[xana].eblob1
-bins = range(minimum(vars3), 1.1*maximum(vars3), 100)
-h4  = histogram(dfs_pevt[xana].eblob1, nbins = bins, title = "blob energy", label = "1", alpha = 0.5)
-histogram!(dfs_pevt[xana].eblob2, nbins = bins, label = "2", alpha = 0.5)
-
 	
-plot(h1, h2, h3, h4, layout = (2, 2), size = (650, 600))
+function _aves()
+	dd = Dict()
+	nn = length(anas)
+	dd[:configs] = anas
+	xvars = [:nclouds, :nnodes, :nodesblob, :nblobs]
+	for var in xvars
+		vals = zeros(Float64, nn)
+		for (i, ana) in enumerate(anas)
+			vals[i] = round(mean(dfs_pevt[ana][!, var]), digits = 3)
+		end
+		dd[var] = vals
+	end 
+	return DataFrame(dd)
+end
+
+end
+
+# ╔═╡ 9ff33e11-7e83-4934-91c5-2a7dbc474d8b
+_aves()
+
+# ╔═╡ 33c566de-b937-437c-b7c5-efa1abe252ad
+begin
+_hes, _ses = _histos_var(dfs_pevt[xana])
+_his = [_hes[k] for k in sort(collect(keys(_hes)))]
+plot(_his..., layout = (5, 2), size = (650, 1000), legend = false)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1384,15 +1460,20 @@ version = "1.4.1+0"
 # ╟─5a3d7765-1281-46f6-b7f6-8cc01bf388e8
 # ╟─1e6e4800-94a1-4e85-935b-772353225dee
 # ╟─b63c3e9b-4ce8-4b55-ac73-0b22ff0c77e6
-# ╟─93d3f989-c0bb-494d-bd87-e5984d72c66b
+# ╟─dca05fbd-cd93-4b7e-b83d-0a2b3dfa4527
+# ╟─fcb09033-3965-40a3-8c7e-34f360540843
+# ╠═9ff33e11-7e83-4934-91c5-2a7dbc474d8b
+# ╟─d9e5028d-d19a-4273-8411-717bf6df71c9
 # ╟─f20085cb-bb9b-47c3-933f-5f01d1367c6e
+# ╟─d1abb94b-9164-4559-8863-23b8d9750a23
+# ╟─33c566de-b937-437c-b7c5-efa1abe252ad
+# ╟─93d3f989-c0bb-494d-bd87-e5984d72c66b
 # ╟─51da992d-06eb-48ca-9127-ae574fbc1a93
-# ╟─3cab1762-3fe1-43b9-a098-36aa8b93c4f3
 # ╟─2923a69b-b819-4567-899c-d9982e9cd107
 # ╟─406d01f4-5494-4917-888c-7fec1bb862d9
 # ╟─a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
 # ╟─6bdb9cbf-111c-44b7-b80d-dbe3264096cd
-# ╟─07f27c84-82de-4590-85c9-c91900469ead
+# ╠═07f27c84-82de-4590-85c9-c91900469ead
 # ╟─c43f710b-fcc4-4324-afa3-3f5bcb25f56c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

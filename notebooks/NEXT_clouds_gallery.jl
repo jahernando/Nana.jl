@@ -38,9 +38,6 @@ import Colors as Colors
 #using PlotlyJS
 end
 
-# ╔═╡ 03bfbaeb-f6f2-4a8b-8815-66d293cbbb66
-PUI.TableOfContents(title="NEXT-100 Event Gallery", indent=true)
-
 # ╔═╡ cdc50171-b288-40b6-9d0d-9511901218e0
 md"""
 
@@ -62,6 +59,9 @@ Santiago de Compostela, October 2022
 
 ---
 """
+
+# ╔═╡ 03bfbaeb-f6f2-4a8b-8815-66d293cbbb66
+PUI.TableOfContents(title="NEXT-100 Event Gallery", indent=true)
 
 # ╔═╡ f8dbfa77-c88d-42f6-bc2a-600b49f8f98d
 # NEXT-100 data
@@ -114,6 +114,25 @@ md"""
 Select reco or mc voxels : $(breco)
 """
 end
+
+# ╔═╡ 4611084e-712c-4b50-8ab9-bc3be16bc231
+begin
+minv, maxv = 0.0, 0.02
+	
+btrheshold = @bind ethreshold PUI.Slider(minv:0.0001:maxv)
+
+md"""
+
+Beersheba threshold : $(btrheshold)
+"""
+end
+
+# ╔═╡ 6fb542df-43a5-46f6-bf89-e9e88bd563aa
+md"""
+
+Energy Beersheba's hits min energy threshold : $(ethreshold)
+
+"""
 
 # ╔═╡ 76dc4710-0771-41ff-a69d-1a23be120502
 begin
@@ -221,6 +240,9 @@ xcontents = copy(xdf[!, :energy])
 xsteps    = Tuple(nsteps * steps)
 end;
 
+# ╔═╡ 561c837c-0c9f-4291-9ae9-5d174a8e0b48
+histogram(xcontents, nbins = 100)
+
 # ╔═╡ bf401c22-da4e-4b72-8fd2-f68c54a11978
 md"""
 
@@ -238,8 +260,15 @@ Total energy $(sum(xcontents)) MeV (after addition of 1 keV per empty cell)
 """
 end
 
-# ╔═╡ c44c6d1c-ae49-45ba-836a-e5f67994749d
-xcl, xnd, xspine, xedges = cl.clouds(xcoors, xcontents, xsteps; cellnode = cellnode);
+# ╔═╡ e46aef6a-3618-4b2a-8a83-8501e75c3e52
+begin
+sel       = xcontents .>= ethreshold
+ycontents = xcontents[sel]
+ycoors    = Tuple((x[sel] for x in xcoors))
+end;
+
+# ╔═╡ 0b3712ad-e3a9-405d-b173-a54910f2d15a
+xcl, xnd, xspine, xedges = cl.clouds(ycoors, ycontents, xsteps; cellnode = cellnode);
 
 # ╔═╡ edf5589e-f940-4e4c-bba0-c7dfe592f54d
 md"""
@@ -420,6 +449,8 @@ end;
 # ╟─03d81ddf-105e-4ea6-a882-e1b40b7ecbfc
 # ╟─6da8778c-1b25-414d-b269-2d85978fb72d
 # ╟─beb55efd-4b0e-49a3-9dc8-3bc0de573fbf
+# ╟─4611084e-712c-4b50-8ab9-bc3be16bc231
+# ╟─6fb542df-43a5-46f6-bf89-e9e88bd563aa
 # ╟─76dc4710-0771-41ff-a69d-1a23be120502
 # ╟─897c8506-b03e-44fc-9e37-884e8d28684c
 # ╟─37b9f270-57b5-4a43-9957-bc0ff4f0bd98
@@ -432,9 +463,11 @@ end;
 # ╟─9e1ee657-a53e-4c1e-933e-d103562db116
 # ╟─96dc3227-bdc4-42b9-a0e7-c8f25995058b
 # ╟─4853fff3-dd52-4b6a-b7d1-44fef36b1cef
+# ╠═561c837c-0c9f-4291-9ae9-5d174a8e0b48
 # ╟─bf401c22-da4e-4b72-8fd2-f68c54a11978
 # ╟─2ce7a34b-ca5c-4e12-a700-3cb49d563175
-# ╟─c44c6d1c-ae49-45ba-836a-e5f67994749d
+# ╠═e46aef6a-3618-4b2a-8a83-8501e75c3e52
+# ╠═0b3712ad-e3a9-405d-b173-a54910f2d15a
 # ╟─edf5589e-f940-4e4c-bba0-c7dfe592f54d
 # ╠═29a5823d-46a7-42c6-b573-43793f53a365
 # ╠═2b269e4f-a829-4f82-a8c2-b32b38139e0f
