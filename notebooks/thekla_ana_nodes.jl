@@ -50,7 +50,9 @@ md"""
 """
 
 # ╔═╡ f7c8c720-7516-4fe9-b0d5-ccf8341870bd
-anas = ["clouds_mc_nsteps1",  "clouds_mc_nsteps2", "clouds_mc_nsteps3",    "clouds_mc_nsteps4", "clouds_reco_nsteps1", "clouds_reco_nsteps2", "clouds_reco_nsteps3", "clouds_reco_nsteps4", "paulina_mc_nsteps1", "paulina_mc_nsteps2", "paulina_mc_nsteps3", "paulina_mc_nsteps4", "paulina_reco_nsteps2", "paulina_reco_nsteps3", "paulina_reco_nsteps4"];
+anas = ["clouds_mc_nsteps1",  "clouds_mc_nsteps2", "clouds_mc_nsteps3",    "clouds_mc_nsteps4", "clouds_reco_nsteps1", "clouds_reco_nsteps2", "clouds_reco_nsteps3", "clouds_reco_nsteps4",
+"paulina_mc_nsteps1", "paulina_mc_nsteps2", "paulina_mc_nsteps3", "paulina_mc_nsteps4", "paulina_mc_nsteps5",
+"paulina_reco_nsteps1", "paulina_reco_nsteps2", "paulina_reco_nsteps3", "paulina_reco_nsteps4", "paulina_reco_nsteps5"];
 
 # ╔═╡ 73efbbfa-70a8-4e6a-a019-77810f45b2e3
 begin
@@ -142,6 +144,8 @@ function _hist(df, name, bins, alpha)
 		alpha = 0.5, normed = true, label = "track")
 	histogram!(df[!, name][df.label .== 3], bins = bins,
 		alpha = 0.5, normed = true, label = "blob")
+	#histogram!(df[!, name][df.label .>  3], bins = bins,
+	#	alpha = 0.5, normed = true, label = "out-spine")
 	return h1
 end
 
@@ -179,6 +183,37 @@ xhis   = [hs[name] for name in xnames]
 plot(xhis..., layout = xlayout, size = (650, 700), legend = false)
 end
 
+# ╔═╡ a6502535-3250-4682-a95c-2933458aff7b
+md"""
+
+## Filter Voxels 
+
+"""
+
+# ╔═╡ e77a751a-a61d-4e88-8b38-4bf4d09a5a64
+begin
+function _vfilter(df; title = "", vmax = 0.1)
+	sel1  = (df.label .> 0) .& (df.label .<= 3)
+	sel2  = df.label .>  3
+	var   = df.contents
+	nbins = range(0, vmax, 100)
+	_hi = histogram(var[sel1], nbins = nbins, title = title,
+		label = "in the spine", alpha = 0.5, normed = true)
+	histogram!(var[sel2], nbins = nbins,
+		label = "out the spine", alpha = 0.5, normed = true)
+	return _hi
+end
+
+end
+
+# ╔═╡ 2e364583-8c02-46a4-be10-1da74f7c68d8
+vhis = [_vfilter(dfs[ana]; title = ana, vmax = 0.1) for ana in anas if occursin("reco", ana)]
+
+# ╔═╡ 37b1b5ed-3f1d-4de1-bc16-b382cc570c41
+begin
+plot(vhis..., layout = (5, 2), size = (650, 700), legend = false)
+end
+
 # ╔═╡ 07f27c84-82de-4590-85c9-c91900469ead
 md"""
 
@@ -196,7 +231,8 @@ function dfperevent(df)
 	nblobs  = zeros(Int64, nevents)
 	eextr1  = zeros(Float64, nevents)
 	eextr2  = zeros(Float64, nevents)
-	ext2isb = zeros(Int64, nevents)
+	lextr1  = zeros(Int64, nevents)
+	lextr2  = zeros(Int64, nevents)
 	eblob1  = zeros(Float64, nevents)
 	eblob2  = zeros(Float64, nevents)
 	edf     = groupby(df, :event)
@@ -208,13 +244,14 @@ function dfperevent(df)
 		nblobs[i] = sum(kdf.label[kdf.extreme .== 1] .== 3)
 		idextr  = findall(x -> x == 1, kdf.extreme)
 		idblobs = findall(x -> x == 3, kdf.label)
-		if (length(idextr) >= 2)
+		if (length(idextr) == 2)
 			eextr   = kdf.contents[idextr]
-			k       = argmin(eextr)
-			idb2    = idextr[k]
-			ext2isb[i] =  kdf.label[idb2] == 3
+			k1, k2  = argmax(eextr), argmin(eextr)
+			i1, i2  = idextr[k1], idextr[k2]
 			eextr1[i]  = maximum(eextr)
 			eextr2[i]  = minimum(eextr)
+			lextr1[i]  = kdf.label[i1]
+			lextr2[i]  = kdf.label[i2]
 		end   
 		if (length(idblobs) >= 2)
 			eblobs = sort(kdf.contents[idblobs], rev = true)
@@ -223,7 +260,8 @@ function dfperevent(df)
 		end
 	end
 	dd = Dict(:nclouds => ncloud, :nnodes => nnodes, :nodesblob => nnodeb,         		  :nextremes => nextrs, :nblobs => nblobs, 
-		      :eextr1 => eextr1, :eextr2 => eextr2, :ext2isb => ext2isb,
+		      :eextr1 => eextr1, :eextr2 => eextr2, 
+		      :lextr1 => lextr1, :lextr2 => lextr2,
 		      :eblob1 => eblob1, :eblob2 => eblob2)
 	dd = DataFrame(dd)
 return dd
@@ -259,7 +297,7 @@ function _blob_success(df)
 end
 
 function _blob2_success(df)
-	return round(sum(df.ext2isb .== 1)/length(df.ext2isb), digits = 3)
+	return round(sum(df.lextr2 .== 3)/length(df.lextr2), digits = 3)
 end
 
 	
@@ -304,20 +342,19 @@ md"""
 
 **Paulina**
 
-| success   | mc-1 | mc-2 | mc-3 | mc-4 |
-| ---:      |  --:   |    --: | --:    |   --:  |
-| 2  blobs  | $(success["paulina_mc_nsteps1"][1]) | $(success["paulina_mc_nsteps2"][1]) | $(success["paulina_mc_nsteps3"][1]) | $(success["paulina_mc_nsteps4"][1]) |
-| >= 1 blob | $(success["paulina_mc_nsteps1"][2]) |$(success["paulina_mc_nsteps2"][2]) | $(success["paulina_mc_nsteps3"][2]) |$(success["paulina_mc_nsteps4"][2]) |
-| blob-2 | $(b2success["paulina_mc_nsteps1"]) |$(b2success["paulina_mc_nsteps2"]) | $(b2success["paulina_mc_nsteps3"]) |$(b2success["paulina_mc_nsteps4"]) |
+| success   | mc-1 | mc-2 | mc-3 | mc-4 | mc-5 |
+| ---:      |  --:   |    --: | --:    |   --:  | --: |
+| 2  blobs  | $(success["paulina_mc_nsteps1"][1]) | $(success["paulina_mc_nsteps2"][1]) | $(success["paulina_mc_nsteps3"][1]) | $(success["paulina_mc_nsteps4"][1]) | $(success["paulina_mc_nsteps5"][1]) |
+| >= 1 blob | $(success["paulina_mc_nsteps1"][2]) |$(success["paulina_mc_nsteps2"][2]) | $(success["paulina_mc_nsteps3"][2]) |$(success["paulina_mc_nsteps4"][2]) | $(success["paulina_mc_nsteps5"][2])|
+| blob-2 | $(b2success["paulina_mc_nsteps1"]) |$(b2success["paulina_mc_nsteps2"]) | $(b2success["paulina_mc_nsteps3"]) |$(b2success["paulina_mc_nsteps4"]) |$(b2success["paulina_mc_nsteps5"]) |
 
 
 
-| success   | reco-1 | reco-2 | reco-3 | reco-4 |
-| ---:      |  --:   |    --: | --:    |   --:  |
-| 2  blobs  |  | $(success["paulina_reco_nsteps2"][1]) | $(success["paulina_reco_nsteps3"][1]) | $(success["paulina_reco_nsteps4"][1]) |
-| >= 1 blob | |$(success["paulina_reco_nsteps2"][2]) | $(success["paulina_reco_nsteps3"][2]) |$(success["paulina_reco_nsteps4"][2]) |
-| blob-2 | |$(b2success["paulina_reco_nsteps2"]) | $(b2success["paulina_reco_nsteps3"]) |$(b2success["paulina_reco_nsteps4"]) |
-
+| success   | reco-1 | reco-2 | reco-3 | reco-4 | reco-5 |
+| ---:      |  --:   |    --: | --:    |   --:  | --: |
+| 2  blobs  |  | $(success["paulina_reco_nsteps2"][1]) | $(success["paulina_reco_nsteps3"][1]) | $(success["paulina_reco_nsteps4"][1]) |$(success["paulina_reco_nsteps5"][1]) |
+| >= 1 blob | |$(success["paulina_reco_nsteps2"][2]) | $(success["paulina_reco_nsteps3"][2]) |$(success["paulina_reco_nsteps4"][2]) |$(success["paulina_reco_nsteps5"][2]) |
+| blob-2 | |$(b2success["paulina_reco_nsteps2"]) | $(b2success["paulina_reco_nsteps3"]) |$(b2success["paulina_reco_nsteps4"]) |$(b2success["paulina_reco_nsteps5"]) |
 
 """
 
@@ -390,8 +427,11 @@ _aves()
 begin
 _hes, _ses = _histos_var(dfs_pevt[xana])
 _his = [_hes[k] for k in sort(collect(keys(_hes)))]
-plot(_his..., layout = (5, 2), size = (650, 1000), legend = false)
+plot(_his..., layout = (6, 2), size = (650, 1000), legend = false)
 end
+
+# ╔═╡ 7497fa8c-c0f3-4798-8aa5-3ca652a1492b
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1448,14 +1488,14 @@ version = "1.4.1+0"
 # ╟─4a04e7a4-5c5f-11ed-3a08-5fcaddecdf9d
 # ╟─a6347485-2dad-4343-bfe0-ed0de5a1e787
 # ╟─e4f36710-f912-4f6d-a47c-bc7fb4eff6bb
-# ╟─b16c5925-ad77-41a0-9fec-4f016a4e0b66
-# ╟─f7c8c720-7516-4fe9-b0d5-ccf8341870bd
-# ╟─73efbbfa-70a8-4e6a-a019-77810f45b2e3
+# ╠═b16c5925-ad77-41a0-9fec-4f016a4e0b66
+# ╠═f7c8c720-7516-4fe9-b0d5-ccf8341870bd
+# ╠═73efbbfa-70a8-4e6a-a019-77810f45b2e3
 # ╟─983028df-7260-4dc1-8a60-7871d0ea144c
 # ╟─811d9582-17b6-4e24-816f-12e505cb55ea
 # ╟─e39ab4c9-9074-4129-a4fc-de009a54626d
 # ╟─125a75ec-5726-4e7e-88be-9b1faf094845
-# ╟─e4d716ba-5bc7-4c4f-90ff-7d0070b5f2c3
+# ╠═e4d716ba-5bc7-4c4f-90ff-7d0070b5f2c3
 # ╟─ebf97462-f102-4e9b-822a-8c6ce12f4861
 # ╟─5a3d7765-1281-46f6-b7f6-8cc01bf388e8
 # ╟─1e6e4800-94a1-4e85-935b-772353225dee
@@ -1465,15 +1505,20 @@ version = "1.4.1+0"
 # ╠═9ff33e11-7e83-4934-91c5-2a7dbc474d8b
 # ╟─d9e5028d-d19a-4273-8411-717bf6df71c9
 # ╟─f20085cb-bb9b-47c3-933f-5f01d1367c6e
-# ╟─d1abb94b-9164-4559-8863-23b8d9750a23
-# ╟─33c566de-b937-437c-b7c5-efa1abe252ad
+# ╠═d1abb94b-9164-4559-8863-23b8d9750a23
+# ╠═33c566de-b937-437c-b7c5-efa1abe252ad
 # ╟─93d3f989-c0bb-494d-bd87-e5984d72c66b
 # ╟─51da992d-06eb-48ca-9127-ae574fbc1a93
 # ╟─2923a69b-b819-4567-899c-d9982e9cd107
 # ╟─406d01f4-5494-4917-888c-7fec1bb862d9
-# ╟─a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
+# ╠═a8fd89a9-cd98-40ab-9e46-ee3f250b5ab7
 # ╟─6bdb9cbf-111c-44b7-b80d-dbe3264096cd
+# ╠═a6502535-3250-4682-a95c-2933458aff7b
+# ╠═e77a751a-a61d-4e88-8b38-4bf4d09a5a64
+# ╠═2e364583-8c02-46a4-be10-1da74f7c68d8
+# ╠═37b1b5ed-3f1d-4de1-bc16-b382cc570c41
 # ╠═07f27c84-82de-4590-85c9-c91900469ead
-# ╟─c43f710b-fcc4-4324-afa3-3f5bcb25f56c
+# ╠═c43f710b-fcc4-4324-afa3-3f5bcb25f56c
+# ╠═7497fa8c-c0f3-4798-8aa5-3ca652a1492b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
