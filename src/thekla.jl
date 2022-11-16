@@ -27,7 +27,7 @@ function _dfnodes(xnd)
 
 	vstd = reduce(hcat, xnd.coors_std)
 	dstd = norm.(eachrow(vstd))
-	dd[:dst] = dstd
+	dd[:std] = dstd
 
 	dd[:maxgrad] = xnd.maxgrad
 	dd[:maxlap]  = xnd.maxlap
@@ -35,9 +35,9 @@ function _dfnodes(xnd)
 	dd[:maxcur]  = xnd.curmax
 	dd[:mincur]  = xnd.curmin
 
-	dd[:nedges] = xnd.nedges
-	dd[:cloud]  = xnd.cloud
-	dd[:ecc]    = xnd.ecc
+	dd[:nedges]  = xnd.nedges
+	dd[:cloud]   = xnd.cloud
+	dd[:ecc]     = xnd.ecc
 	dd[:extreme] = Int64.(xnd.extremes)
 
 	#dd[:label]   = nlabel
@@ -76,11 +76,27 @@ function _distance_to_blob(nlabel, dist)
 	return dist_blob
 end
 
+function _distance_to_extremes(extrs, dist)
+	nnodes = length(extrs)
+	idextr = findall(x -> x .== 1, extrs)
+	dtoextr1 = zeros(Int64, nnodes)
+	dtoextr2 = zeros(Int64, nnodes)
+	if ((length(idextr) != 2) || (nnodes <= 1))
+		 return dtoextr1, dtoextr2
+	end
+	ide1, ide2 = idextr[1], idextr[2]
+	dtoextr1 = dist[:, ide1]
+	dtoextr2 = dist[:, ide2]
+	return dtoextr1, dtoextr2
+end
+
+
+
 function _thekla(idf, steps;
 	 			 nsteps = 1, cellnode = false)
 
 	coors, contents, xsteps = _coors(idf, steps; nsteps = nsteps)
-	#contents = _connect(contents) # fix to connect empty energy voxels
+	contents = _connect(contents) # fix to connect empty energy voxels
 
 	cl, nd, graph, edges = clouds(coors, contents, xsteps;
 	  							  cellnode = cellnode)
@@ -93,6 +109,10 @@ function _thekla(idf, steps;
 	disttoblob = _distance_to_blob(nlabel, graph.dists)
 	dd[!, :disttoblob] = disttoblob
 
+	#dtoextr1, dtoextr1 = _distance_to_extremes(dd.extreme, graph.dists)
+	#dd[!, :dtoextr1] = dtoextr1
+	#dd[!, :dtoextr2] = dtoextr2
+
 	return dd
 end
 
@@ -103,16 +123,18 @@ ifiles[:bb0nu] = Tuple(string("bb0nu/v2/beersheba_fixed_label_", i, "_0nubb.h5")
 ifiles[:Bi214] = Tuple(string("Bi/Beersheba/fixed_label/beersheba_label_", i,
 				"_214Bi.h5") for i in 1:310)
 ofiles         = Dict()
-ofiles[:bb0nu] = "bb0nu/Thekla/thekla_nodes_noconnect"
-ofiles[:Bi214] = "Bi/Thekla/thekla_nodes_noconnect"
+ofiles[:bb0nu] = "bb0nu/Thekla/thekla_nodes"
+ofiles[:Bi214] = "Bi/Thekla/thekla_nodes"
 #df, mc, steps = load_data(string(datadir, filename));
 
+#-----
+# Main function
 
 function thekla(; data   = :bb0nu,
-	 			nfiles = -1,
-				reco   = true,
-				cellnode = false,
-				nsteps = 1)
+	 			  nfiles = -1,
+				  reco   = true,
+				  cellnode = false,
+				  nsteps = 1)
 
 	filenames = nfiles > 0 ? ifiles[data][1:nfiles] : ifiles[data]
 	nfiles = length(filenames)
@@ -162,6 +184,8 @@ function event_summary(df)
 	ncloud  = zeros(Int64  , nevents)    # number of clouds (tracks)
 	nnodes  = zeros(Int64  , nevents)    # number of nodes
 	nextrs  = zeros(Int64  , nevents)    # number of extremes
+	cextr1  = zeros(Int64  , nevents)    # eccentricity of the extreme 1
+	cextr2  = zeros(Int64  , nevents)    # eccentricity of the extreme 2
 	eextr1  = zeros(Float64, nevents)    # energy of extreme 1 (most energetic)
 	eextr2  = zeros(Float64, nevents)    # energy of extreme 2
 	lextr1  = zeros(Int64  , nevents)    # label of the extreme 1
@@ -192,6 +216,8 @@ function event_summary(df)
 			lextr2[i]  = kdf.label[i2]
 			dextr1[i]  = kdf.disttoblob[i1]
 			dextr2[i]  = kdf.disttoblob[i2]
+			cextr1[i]  = kdf.ecc[i1]
+			cextr2[i]  = kdf.ecc[i2]
 			nextrbs[i] = (lextr1[i] == 3) + (lextr2[i] == 3)
 		end
 		if (length(idblobs) >= 2)
@@ -211,6 +237,8 @@ function event_summary(df)
 		      :lextr2   => lextr2,
 			  :dextr1   => dextr1,
 		      :dextr2   => dextr2,
+			  :cextr1   => cextr1,
+		      :cextr2   => cextr2,
 		      :nextrbs  => nextrbs,
 		      :nnodesbs => nnodebs,
 		      :enodeb1  => enodeb1,
@@ -218,7 +246,6 @@ function event_summary(df)
 	dd = DataFrame(dd)
 return dd
 end
-
 
 #
 # function run(filename, config)

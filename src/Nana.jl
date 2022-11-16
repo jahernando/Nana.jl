@@ -10,6 +10,6 @@ include("labeled_clouds.jl")
 export bin_ids, label_cell, label_node
 
 include("thekla.jl")
-export _coors, _thekla
+export _coors, _thekla, event_summary
 
 end
