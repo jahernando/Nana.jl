@@ -48,6 +48,8 @@ function _dfnodes(xnd)
 end
 
 function _connect(contents, emin = 1e-3)
+	""" fill the null energy beersheba voxels to a minimum energry
+	"""
 	ene0 = sum(contents)
 	sel = contents .== 0.0
 	contents[sel] .= emin
@@ -58,17 +60,22 @@ function _connect(contents, emin = 1e-3)
 end
 
 function _coors(idf, steps; nsteps = 1)
+	""" return the hit data (in idf DataFrame) into
+	the data required by clouds (coors, contents, steps)
+	"""
 
 	coors    = Tuple((idf[!, :x], idf[!, :y], idf[!, :z]))
 	contents = copy(idf[!, :energy])
-	xsteps    = Tuple(nsteps * steps)
+	xsteps   = Tuple(nsteps * steps)
 
 	return coors, contents, xsteps
 end
 
-function _distance_to_blob(nlabel, dist)
+function _distance_to_blob(nlabel, dist; label = 3)
+	""" compute the minimun distance of each note to a node labeled as blob
+	"""
 	nnodes    = length(nlabel)
-	idblobs   = findall(x -> x .== 3, nlabel)
+	idblobs   = findall(x -> x .== label, nlabel)
 	if (length(idblobs) <= 0)
 		return zeros(Int64, nnodes)
 	end
@@ -77,6 +84,8 @@ function _distance_to_blob(nlabel, dist)
 end
 
 function _distance_to_extremes(extrs, dist)
+	""" return the distance of each note the two extreme nodes, otherwise is 0
+	"""
 	nnodes = length(extrs)
 	idextr = findall(x -> x .== 1, extrs)
 	dtoextr1 = zeros(Int64, nnodes)
@@ -91,9 +100,13 @@ function _distance_to_extremes(extrs, dist)
 end
 
 
-
-function _thekla(idf, steps;
-	 			 nsteps = 1, cellnode = false)
+function _thekla(idf, imc, steps;
+	 			 nsteps = 1,
+				 cellnode = false)
+	""" compute clouds and return a data-fame
+	with the nodes of clouds per event.
+	It label the nodes and set the initial node
+	"""
 
 	coors, contents, xsteps = _coors(idf, steps; nsteps = nsteps)
 	contents = _connect(contents) # fix to connect empty energy voxels
@@ -103,15 +116,22 @@ function _thekla(idf, steps;
 	clabel = label_cell(edges, cl.cells, coors, idf.segclass)
 	nlabel = label_node(cl.node, clabel)
 
+	cinit  = initial_cell(edges, cl.cells, imc)
+	ninit  = label_node(cl.node, cinit)
+
 	dd         = _dfnodes(nd)
 	dd[!, :label] = nlabel
+	dd[!, :init]  = ninit
 
 	disttoblob = _distance_to_blob(nlabel, graph.dists)
 	dd[!, :disttoblob] = disttoblob
 
-	#dtoextr1, dtoextr1 = _distance_to_extremes(dd.extreme, graph.dists)
-	#dd[!, :dtoextr1] = dtoextr1
-	#dd[!, :dtoextr2] = dtoextr2
+	disttoinit = _distance_to_blob(ninit, graph.dists; label = 1)
+	dd[!, :disttoinit] = disttoinit
+
+	dtoextr1, dtoextr2 = _distance_to_extremes(dd.extreme, graph.dists)
+	dd[!, :disttoextr1] = dtoextr1
+	dd[!, :disttoextr2] = dtoextr2
 
 	return dd
 end
@@ -130,11 +150,17 @@ ofiles[:Bi214] = "Bi/Thekla/thekla_nodes"
 #-----
 # Main function
 
-function thekla(; data   = :bb0nu,
-	 			  nfiles = -1,
-				  reco   = true,
-				  cellnode = false,
-				  nsteps = 1)
+function thekla(; data           = :bb0nu,
+	 			  nfiles         = -1,
+				  evt_min_energy = 2.0, # MeV
+				  reco           = true,
+				  cellnode       = false,
+				  nsteps         = 1)
+
+	counters = Dict(:input_hits     => 0,
+					:evt_min_energy => 0,
+					:evt_min_nodes  => 0,
+					:output_nodes   => 0)
 
 	filenames = nfiles > 0 ? ifiles[data][1:nfiles] : ifiles[data]
 	nfiles = length(filenames)
@@ -156,14 +182,30 @@ function thekla(; data   = :bb0nu,
 		events        = event_list(df)
 		println("events in file ", filename, " : ", length(events))
 		for event in events
+			counters[:input_hits] += 1
 			idf = get_event(df, event)
 			imc = get_event(mc, event)
 			xdf = reco ? idf : imc
-			odf = _thekla(xdf, steps;
+
+			ene = sum(xdf.energy)
+			if (ene <= evt_min_energy)
+				continue
+			end
+			counters[:evt_min_energy] += 1
+
+			odf = _thekla(xdf, imc, steps;
 			              nsteps = nsteps, cellnode = cellnode)
+			nnodes = length(odf.contents)
+			if (nnodes <= 0)
+				continue
+			end
+			counters[:evt_min_nodes] += 1
+
+
 			odf[!, :event] .= 1000*i + event
 			dfout = nevts == 0 ? odf : vcat(dfout, odf)
 			nevts += 1
+			counters[:output_nodes] += 1
 		end
 	end
 
@@ -171,8 +213,21 @@ function thekla(; data   = :bb0nu,
 	println("write output at  : ", ofile)
 	println("processed events : ", nevts)
 	CSV.write(ofile, dfout)
+	ofile_counters = replace(ofile, "nodes" => "counters")
+	dcounters = DataFrame(counters)
+	CSV.write(ofile_counters, dcounters)
 
-	return dfout
+	return dfout, dcounters
+end
+
+function _prod(; cellnode = false, nsteps = 1)
+
+	for data in [:bb0nu, :Bi214]
+		for reco in (false, true)
+			thekla(; data = data, evt_min_energy = 2.2, reco = reco,
+	         	     cellnode = cellnode,  nsteps = nsteps)
+		end
+	end
 end
 
 #---- analysis
@@ -186,16 +241,22 @@ function event_summary(df)
 	nextrs  = zeros(Int64  , nevents)    # number of extremes
 	cextr1  = zeros(Int64  , nevents)    # eccentricity of the extreme 1
 	cextr2  = zeros(Int64  , nevents)    # eccentricity of the extreme 2
+	disext  = zeros(Int64  , nevents)    # distance between extreme 1 and 2
 	eextr1  = zeros(Float64, nevents)    # energy of extreme 1 (most energetic)
 	eextr2  = zeros(Float64, nevents)    # energy of extreme 2
 	lextr1  = zeros(Int64  , nevents)    # label of the extreme 1
 	lextr2  = zeros(Int64  , nevents)    # label of extreme 2
-	dextr1  = zeros(Int64  , nevents)    # distance of the extreme 1 to a blob
-	dextr2  = zeros(Int64  , nevents)    # distance of the extreme 2 to a blob
+	d2bextr1 = zeros(Int64 , nevents)    # distance of the extreme 1 to a blob
+	d2bextr2 = zeros(Int64 , nevents)    # distance of the extreme 2 to a blob
+	d2iextr1 = zeros(Int64 , nevents)    # distance of the extreme 1 to the init node
+	d2iextr2 = zeros(Int64 , nevents)    # distance of the extreme 1 to the init node
 	nextrbs = zeros(Int64  , nevents)    # number of extremes labeled as blobs
 	nnodebs = zeros(Int64  , nevents)    # number of nodes labeled as blobs
+	nnodeis = zeros(Int64  , nevents)    # number of initial nodes
 	enodeb1 = zeros(Float64, nevents)    # energy of the node labeled as blob 1-most energetic
 	enodeb2 = zeros(Float64, nevents)    # energy of the node labelled as blob 2
+	enodei1 = zeros(Float64, nevents)    # energy of the initial node
+	lnodei1 = zeros(Int64  , nevents)    # label of the initial node
 	edf     = groupby(df, :event)
 	for (i, kdf) in enumerate(edf)
 		event[i]   = maximum(kdf.event)
@@ -204,9 +265,11 @@ function event_summary(df)
 		nnodes[i]  = length(kdf.event)
 		idextr     = findall(x -> x == 1, kdf.extreme)
 		idblobs    = findall(x -> x == 3, kdf.label)
+		idinit     = findall(x -> x == 1, kdf.init)
 		nextrs[i]  = length(idextr)
 		nnodebs[i] = length(idblobs)
-		if (length(idextr) == 2)
+		nnodeis[i] = length(idinit)
+		if (length(idextr) >= 2)
 			eextr   = kdf.contents[idextr]
 			k1, k2  = argmax(eextr), argmin(eextr)
 			i1, i2  = idextr[k1], idextr[k2]
@@ -214,16 +277,28 @@ function event_summary(df)
 			eextr2[i]  = minimum(eextr)
 			lextr1[i]  = kdf.label[i1]
 			lextr2[i]  = kdf.label[i2]
-			dextr1[i]  = kdf.disttoblob[i1]
-			dextr2[i]  = kdf.disttoblob[i2]
+			d2bextr1[i] = kdf.disttoblob[i1]
+			d2bextr2[i] = kdf.disttoblob[i2]
+			d2iextr1[i] = kdf.disttoinit[i1]
+			d2iextr2[i] = kdf.disttoinit[i2]
 			cextr1[i]  = kdf.ecc[i1]
 			cextr2[i]  = kdf.ecc[i2]
-			nextrbs[i] = (lextr1[i] == 3) + (lextr2[i] == 3)
+			disext[i]  = maximum(kdf.disttoextr1)
+			nextrbs[i]  = (lextr1[i] == 3) + (lextr2[i] == 3)
 		end
-		if (length(idblobs) >= 2)
+		if (length(idinit) >= 1)
+			einit       = kdf.contents[idinit]
+			k1          = argmax(kdf.contents[idinit])
+			i1          = idinit[k1]
+			enodei1[i]  = maximum(einit)
+			lnodei1[i]  = kdf.label[i1]
+		end
+		if (length(idblobs) >= 1)
 			enodebs = sort(kdf.contents[idblobs], rev = true)
 			enodeb1[i] = enodebs[1]
-			enodeb2[i] = enodebs[2]
+			if (length(idblobs) >= 2)
+				enodeb2[i] = enodebs[2]
+			end
 		end
 	end
 	dd = Dict(:event    => event,
@@ -231,18 +306,27 @@ function event_summary(df)
 			  :nclouds  => ncloud,
 		      :nnodes   => nnodes,
 		      :nextrs   => nextrs,
+			  :nnodesbs => nnodebs,
+			  :nnodesis => nnodeis,
 		      :eextr1   => eextr1,
 		      :eextr2   => eextr2,
 		      :lextr1   => lextr1,
 		      :lextr2   => lextr2,
-			  :dextr1   => dextr1,
-		      :dextr2   => dextr2,
 			  :cextr1   => cextr1,
 		      :cextr2   => cextr2,
+			  :disext   => disext,
+			  :d2bextr1 => d2bextr1,
+			  :d2bextr2 => d2bextr2,
+			  :d2iextr1 => d2iextr1,
+			  :d2iextr2 => d2iextr2,
 		      :nextrbs  => nextrbs,
 		      :nnodesbs => nnodebs,
+			  :nnodesis => nnodeis,
 		      :enodeb1  => enodeb1,
-		      :enodeb2  => enodeb2)
+		      :enodeb2  => enodeb2,
+			  :enodei1  => enodei1,
+			  :lnodei1  => lnodei1
+			  )
 	dd = DataFrame(dd)
 return dd
 end

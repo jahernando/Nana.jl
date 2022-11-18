@@ -7,9 +7,9 @@ include("io.jl")
 export load_data, event_list, get_event
 
 include("labeled_clouds.jl")
-export bin_ids, label_cell, label_node
+export bin_ids, label_cell, label_node, initial_cell
 
 include("thekla.jl")
-export _coors, _thekla, event_summary
+export thekla, event_summary, _thekla, _coors
 
 end
