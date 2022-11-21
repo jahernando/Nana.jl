@@ -3,7 +3,151 @@ using DataFrames
 using Clouds
 using LinearAlgebra
 
-export _coors, _thekla, event_summary
+export thekla, prod, event_summary, _coors, _thekla
+
+#--------------
+#  Main function
+#---------------
+
+function thekla(; data           = :bb0nu,
+	 			  nfiles         = -1,
+				  evt_min_energy = 2.0, # MeV
+				  reco           = true,
+				  cellnode       = false,
+				  nsteps         = 1)
+
+	counters = Dict(:input_hits     => 0,
+					:evt_min_energy => 0,
+					:evt_min_nodes  => 0,
+					:output_nodes   => 0)
+
+	filenames = nfiles > 0 ? ifiles[data][1:nfiles] : ifiles[data]
+	nfiles = length(filenames)
+	println("Total number of input files ", nfiles)
+
+	datatype = reco ? "reco" : "mc"
+	algoname = cellnode ? "breadth" : "clouds"
+
+	ofilename = ofiles[data]
+	ofile     = string(ofilename, "_nfiles", nfiles, "_", algoname,
+						"_", datatype,
+					 	"_nsteps", nsteps,".csv")
+	println("Output filename ", ofile)
+
+	nevts = 0
+	dfout = DataFrame()
+	for (i, filename) in enumerate(filenames)
+		df, mc, steps = load_data(string(datadir, filename))
+		events        = event_list(df)
+		println("events in file ", filename, " : ", length(events))
+		for event in events
+			counters[:input_hits] += 1
+			idf = get_event(df, event)
+			imc = get_event(mc, event)
+			xdf = reco ? idf : imc
+
+			ene = sum(xdf.energy)
+			if (ene <= evt_min_energy)
+				continue
+			end
+			counters[:evt_min_energy] += 1
+
+			odf = _thekla(xdf, imc, steps;
+			              nsteps = nsteps, cellnode = cellnode)
+			nnodes = length(odf.contents)
+			if (nnodes <= 0)
+				continue
+			end
+			counters[:evt_min_nodes] += 1
+
+
+			odf[!, :event] .= 1000*i + event
+			dfout = nevts == 0 ? odf : vcat(dfout, odf)
+			nevts += 1
+			counters[:output_nodes] += 1
+		end
+	end
+
+	ofile = string(datadir, ofile)
+	println("write output at  : ", ofile)
+	println("processed events : ", nevts)
+	CSV.write(ofile, dfout)
+	ofile_counters = replace(ofile, "nodes" => "counters")
+	dcounters = DataFrame(counters)
+	CSV.write(ofile_counters, dcounters)
+
+	return dfout, dcounters
+end
+
+function prod(; cellnode = false, nsteps = 1)
+
+	for data in [:bb0nu, :Bi214]
+		for reco in (false, true)
+			if (reco)
+				continue
+			end
+			thekla(; data = data, evt_min_energy = 2.2, reco = reco,
+	         	     cellnode = cellnode,  nsteps = nsteps)
+		end
+	end
+end
+
+function _thekla(idf, imc, steps;
+	 			 nsteps = 1,
+				 cellnode = false)
+	""" compute clouds and return a data-fame
+	with the nodes of clouds per event.
+	It label the nodes and set the initial node
+	"""
+
+	# get clouds input
+	coors, contents, xsteps = _coors(idf, steps; nsteps = nsteps)
+	# fix to connect emtpy energy voxels
+	contents = _connect(contents) # fix to connect empty energy voxels
+
+	# call clouds
+	cl, nd, graph, edges = clouds(coors, contents, xsteps;
+	  							  cellnode = cellnode)
+
+	# Data Frame with the nodes variables
+	dd         = _dfnodes(nd)
+								
+	# label cells and nodes
+	clabel = label_cell(edges, cl.cells, coors, idf.segclass)
+	nlabel = label_node(cl.node, clabel)
+	dd[!, :label] = nlabel
+
+	# index the cells as blob 1, 2
+	bclabel = label_cell_blobindex(cl.cells, clabel)
+	bnlabel = label_node(cl.node, bclabel)
+	println("blob indices ", Set(bclabel)) 
+	dd[!, :blobindex] = bnlabel
+
+	# initial cell and node
+	cinit  = initial_cell(edges, cl.cells, imc)
+	ninit  = label_node(cl.node, cinit)
+	dd[!, :init]  = ninit
+
+	# distance to blob
+	disttoblob = _distance_to_blob(nlabel, graph.dists)
+	dd[!, :disttoblob] = disttoblob
+
+	# distance to init
+	disttoinit = _distance_to_blob(ninit, graph.dists; label = 1)
+	dd[!, :disttoinit] = disttoinit
+
+	#distance to extremes
+	dtoextr1, dtoextr2 = _distance_to_extremes(dd.extreme, graph.dists)
+	dd[!, :disttoextr1] = dtoextr1
+	dd[!, :disttoextr2] = dtoextr2
+
+	return dd
+end
+
+
+#--------------------------
+# Internal Functions
+#------------------------
 
 function _distance(coors0, coors1)
 	x0 = reduce(hcat, coors0)
@@ -113,14 +257,22 @@ function _thekla(idf, imc, steps;
 
 	cl, nd, graph, edges = clouds(coors, contents, xsteps;
 	  							  cellnode = cellnode)
-	clabel = label_cell(edges, cl.cells, coors, idf.segclass)
-	nlabel = label_node(cl.node, clabel)
-
-	cinit  = initial_cell(edges, cl.cells, imc)
-	ninit  = label_node(cl.node, cinit)
 
 	dd         = _dfnodes(nd)
+								
+	# label cells and nodes
+	clabel = label_cell(edges, cl.cells, coors, idf.segclass)
+	nlabel = label_node(cl.node, clabel)
 	dd[!, :label] = nlabel
+
+	# index the cells as blob 1, 2
+	bclabel = label_cell_blobindex(cl.cells, clabel)
+	bnlabel = label_node(cl.node, bclabel) 
+	dd[!, :blobindex] = bnlabel
+
+	# initial cell and node
+	cinit  = initial_cell(edges, cl.cells, imc)
+	ninit  = label_node(cl.node, cinit)
 	dd[!, :init]  = ninit
 
 	disttoblob = _distance_to_blob(nlabel, graph.dists)
@@ -147,8 +299,9 @@ ofiles[:bb0nu] = "bb0nu/Thekla/thekla_nodes"
 ofiles[:Bi214] = "Bi/Thekla/thekla_nodes"
 #df, mc, steps = load_data(string(datadir, filename));
 
-#-----
-# Main function
+#--------------
+#  Main function
+#---------------
 
 function thekla(; data           = :bb0nu,
 	 			  nfiles         = -1,
@@ -224,6 +377,9 @@ function _prod(; cellnode = false, nsteps = 1)
 
 	for data in [:bb0nu, :Bi214]
 		for reco in (false, true)
+			if (reco)
+				continue
+			end
 			thekla(; data = data, evt_min_energy = 2.2, reco = reco,
 	         	     cellnode = cellnode,  nsteps = nsteps)
 		end

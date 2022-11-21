@@ -1,6 +1,7 @@
 import StatsBase  as SB
+using Clouds
 
-export label_cell, label_node, initial_cell
+export label_cell, label_cell_blobindex, label_node, initial_cell
 
 function bins_ids(coors, edges)
     h = SB.fit(SB.Histogram, coors, edges)
@@ -18,15 +19,33 @@ function _label(labs)
 	return 0
 end
 
-function label_cell(edges, cells, coors, labels)
+function label_cell(edges, cells, coors, labels; funct = _label)
 	bins = bins_ids(coors, edges)
 	xlabel = zeros(Int64, length(cells))
 	for (i, icell) in enumerate(cells)
 		sel = [b == icell for b in bins]
 		labs = Set(labels[sel])
-		xlabel[i] = _label(labs)
+		xlabel[i] = funct(labs)
 	end
 	return xlabel
+end
+
+function label_cell_blobindex(cells, clabel)
+
+	nsize   = length(clabel)
+	blabels = zeros(Int64, nsize)
+
+	sel     = clabel .== 3
+	if (sum(sel) <= 0)
+		return blabels
+	end
+
+	bcells  = cells[sel]
+	blabel  = clabel[sel]
+	bnodes  = cluster_nodes(bcells, blabel)
+
+	blabels[sel] .= bnodes
+	return blabels
 end
 
 function label_node(cell_node, cell_label)
@@ -40,7 +59,7 @@ function label_node(cell_node, cell_label)
 	return xlabel
 end
 
-function initial_cell(edges, cells, imc; min_nhits = 1)
+function initial_cell(edges, cells, imc; min_nhits = 8)
 	""" set to true the nodes with the first 10 mc-hits,
 	(idf dataframe with hits) (imc dataframe with mc hits)
 	"""
@@ -61,13 +80,4 @@ function initial_cell(edges, cells, imc; min_nhits = 1)
 		end
 	end
 	return clabel
-	# inilabel = zeros(Int64, min_nhits)
-	# for inihit in 1:min_nhits
-	# 	inilabel[inihit] = 1
-	# 	clabel = label_cell(edges, cells, xmccoors, inilabel)
-	# 	if (sum(clabel) >= 1)
-	# 		return clabel
-	# 	end
-	# end
-	# return clabel0
 end
