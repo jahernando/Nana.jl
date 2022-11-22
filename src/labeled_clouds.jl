@@ -59,11 +59,10 @@ function label_node(cell_node, cell_label)
 	return xlabel
 end
 
-function initial_cell(edges, cells, imc; min_nhits = 8)
+function initial_cell(edges, cells, mccoors; min_nhits = 8)
 	""" set to true the nodes with the first 10 mc-hits,
 	(idf dataframe with hits) (imc dataframe with mc hits)
 	"""
-	mccoors = Tuple((imc[!, :x], imc[!, :y], imc[!, :z]))
 	clabel  =  zeros(Int64, length(cells[1]))
 	if (length(mccoors[1]) < min_nhits)
 		return clabel
