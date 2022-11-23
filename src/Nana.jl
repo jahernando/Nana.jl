@@ -7,10 +7,10 @@ include("io.jl")
 export load_data, event_list, get_event
 
 include("labeled_clouds.jl")
-export bin_ids, label_cell, label_cell_blobindex, label_node, initial_cell
+export label_clouds, bins_ids
 
 include("summary.jl")
-export("summary")
+export summary
 
 include("thekla.jl")
 export thekla, _thekla, _coors

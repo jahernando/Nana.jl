@@ -32,9 +32,12 @@ function _summary(df)
 	k2s = [ki[2] for ki in ks]
 	dd[:e1ene]  = [_val(kdf.contents, k) for (k, kdf) in zip(k1s, edf)]
 	dd[:e2ene]  = [_val(kdf.contents, k) for (k, kdf) in zip(k2s, edf)]
-	dd[:e1ecc]  = [_val(kdf.ecc, k)      for (k, kdf) in zip(k1s, edf)]
-	dd[:e2ecc]  = [_val(kdf.ecc, k)      for (k, kdf) in zip(k2s, edf)]
-	dd[:esdis]  = [_dist(kdf, k...)      for (k, kdf)  in zip(ks , edf)]
+
+	dd[:cldist]   = [_dist(kdf, k...)     for (k, kdf) in zip(ks , edf)]
+	dd[:clecc]    = [_val(kdf.ecc, k)      for (k, kdf) in zip(k1s, edf)]
+	icloud        = [_val(kdf.cloud, k)    for (k, kdf) in zip(k1s, edf)]
+	dd[:clene]    = [sum(kdf.contents[kdf.cloud .== ic]) for (ic, kdf) in zip(icloud, edf)]
+	dd[:clnnodes] = [sum(kdf.cloud .== ic)               for (ic, kdf) in zip(icloud, edf)]
 
 	return DataFrame(dd)
 end
@@ -70,7 +73,16 @@ function _summary_label!(dd, df)
 
 	dd[!, :e1label] = [_val(kdf.label, k) for (k, kdf) in zip(k1s, edf)]
 	dd[!, :e2label] = [_val(kdf.label, k) for (k, kdf) in zip(k2s, edf)]
+	#dd[!, :b1label] = [_val(kdf.label, k) for (k, kdf) in zip(b1s, edf)]
+	#dd[!, :b2label] = [_val(kdf.label, k) for (k, kdf) in zip(b2s, edf)]
 	dd[!, :i1label] = [_val(kdf.label, k) for (k, kdf) in zip(i1s, edf)]
+
+	#dd[!, :b1index] = [_val(kdf.blobindex, k) for (k, kdf) in zip(b1s, edf)]
+	#dd[!, :b2index] = [_val(kdf.blobindex, k) for (k, kdf) in zip(b2s, edf)]
+
+	dd[!, :nnblabel] = [sum(kdf.label .== 3)     for kdf in edf]
+	dd[!, :nnblobs]  = [sum(bi .> 0)             for bi  in bs] 
+	dd[!, :nninit]   = [sum(kdf.init .>= 1)      for kdf in edf]
 	
 	dd[!, :e1isbs]  = [_val(kdf.blobindex, k) > 0 for (k, kdf) in zip(k1s, edf)]
 	dd[!, :e2isbs]  = [_val(kdf.blobindex, k) > 0 for (k, kdf) in zip(k2s, edf)]
@@ -102,14 +114,14 @@ function _idextremes(kdf)
 end
 
 function _idblobs(kdf)
-	
-	ids  = findall(x -> x >= 1, kdf.blobindex)
+	ids = findall(x -> x >= 1, kdf.blobindex)
 	i1 = _idmax(ids, kdf.contents)
 	if (i1 == 0)
 		return (0, 0)
 	end
-	bindex =  kdf.blobindex[i1]
-	ids  = findall(x -> x != bindex, ids)
+	b1index = kdf.blobindex[i1]
+	b2index = b1index == 1 ? 2 : 1
+	ids  = findall(x -> x == b2index, kdf.blobindex)
 	i2   = _idmax(ids, kdf.contents)
 	return (i1, i2)
 end
