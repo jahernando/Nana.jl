@@ -13,6 +13,6 @@ include("summary.jl")
 export summary
 
 include("thekla.jl")
-export thekla, _thekla, _coors
+export thekla, _coors, _thekla
 
 end

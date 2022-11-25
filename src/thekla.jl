@@ -3,7 +3,7 @@ using DataFrames
 using Clouds
 using LinearAlgebra
 
-export thekla, prod, event_summary, _coors, _thekla
+export full_prod, prod, thekla, _coors, _thekla
 
 #-----------------
 # Production
@@ -20,13 +20,26 @@ ofiles[:bb0nu] = "bb0nu/Thekla/thekla_nodes"
 ofiles[:Bi214] = "Bi/Thekla/thekla_nodes"
 
 
+function full_prod()
+
+	thekla(; data = :bb0nu, cellnode = true, reco = false, nsteps = 1)
+	thekla(; data = :Bi214, cellnode = true, reco = false, nsteps = 1)
+
+	prod(; cellnode = false, nsteps = 1)
+
+	prod(; cellnode = false, nsteps = 3)
+	prod(; cellnode = true , nsteps = 3)
+
+	prod(; cellnode = false, nsteps = 2)
+	prod(; cellnode = true , nsteps = 2)
+
+end
+
+
 function prod(; cellnode = false, nsteps = 1)
 
 	for data in [:bb0nu, :Bi214]
 		for reco in (false, true)
-			if (reco)
-				continue
-			end
 			thekla(; data = data, evt_min_energy = 2.2, reco = reco,
 	         	     cellnode = cellnode,  nsteps = nsteps)
 		end
@@ -216,11 +229,16 @@ function _dfnodes_label!(dd,      # nodes info DataFrames (to be extended)
 	dd[!, :disttoblob] = [_d2(k, bids) for k in 1:nnodes]
 	dd[!, :disttoinit] = [_d2(k, iids) for k in 1:nnodes]
 
-	k1 = kids[argmax(dd[!, :contents][kids])] # extreme with the max energy
-	k2 = kids[argmin(dd[!, :contents][kids])] # extreme with the min energy
+	if (length(kids) >= 2)
+		k1 = kids[argmax(dd[!, :contents][kids])] # extreme with the max energy
+		k2 = kids[argmin(dd[!, :contents][kids])] # extreme with the min energy
+		dd[!, :disttoextr1] = [_d2(k, (k1,)) for k in 1:nnodes]
+		dd[!, :disttoextr2] = [_d2(k, (k2,)) for k in 1:nnodes]
+	else
+		dd[!, :disttoextr1] = zeros(Int64, nnodes) 
+		dd[!, :disttoextr2] = zeros(Int64, nnodes) 
+	end
 
-	dd[!, :disttoextr1] = [_d2(k, (k1,)) for k in 1:nnodes]
-	dd[!, :disttoextr2] = [_d2(k, (k2,)) for k in 1:nnodes]
 	
 	return dd
 end
